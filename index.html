@@ -168,7 +168,6 @@
         .dept-btn-clear { border-color: #e67e22; color: #e67e22; }
         .dept-btn-clear:hover { background: #e67e22; color: white; }
 
-        /* Стили для поиска */
         .search-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
         .search-input { flex: 1; min-width: 150px; padding: 8px 14px; border: 2px solid #e0e0e0; border-radius: 20px; font-size: 13px; background: white; transition: border-color 0.2s; }
         body.dark .search-input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
@@ -405,7 +404,6 @@
         </div>
     </div>
 
-    <!-- Строка поиска рядом с отделами -->
     <div class="search-controls">
         <input type="text" class="search-input" id="productSearchInput" placeholder="🔍 Поиск товара по названию..." oninput="onSearchInput()">
         <button class="search-clear" onclick="clearSearch()">✕ Очистить</button>
@@ -429,7 +427,6 @@
         <button class="dept-btn" onclick="filterDepartment('Бакалея')">📦 Бакалея</button>
         <button class="dept-btn" onclick="filterDepartment('Алко напитки')">🍺 Алко напитки</button>
         <button class="dept-btn" onclick="filterDepartment('Для дома и животных')">🏠🐾 Для дома и животных</button>
-        <!-- НОВЫЕ ОТДЕЛЫ -->
         <button class="dept-btn" onclick="filterDepartment('Пресервы')">🐟 Пресервы</button>
         <button class="dept-btn" onclick="filterDepartment('Кондитерский')">🍰 Кондитерский</button>
         <button class="dept-btn" onclick="filterDepartment('Другое')">📦 Другое</button>
@@ -2261,7 +2258,14 @@
         closeAddModal();
         showToast('✅ Товар добавлен', 'success');
         showExpiryWarning(newProduct);
-        syncWithGoogle();
+        
+        addToGoogle(newProduct).then(success => {
+            if (success) {
+                updateSyncStatus('green', `Синхронизировано (${products.length})`);
+            } else {
+                updateSyncStatus('orange', 'Ошибка синхронизации');
+            }
+        });
     }
 
     async function confirmDelete() {
@@ -2282,6 +2286,14 @@
         render();
         showToast('🗑️ Товар удалён');
         closeDeleteModal();
+        
+        const success = await deleteFromGoogle(product);
+        if (success) {
+            updateSyncStatus('green', `Синхронизировано (${products.length})`);
+            showToast('✅ Товар удалён из таблицы');
+        } else {
+            updateSyncStatus('orange', 'Ошибка синхронизации');
+        }
     }
 
     async function clearAll() {
@@ -2299,9 +2311,30 @@
         saveToLocal();
         render();
         showToast('🗑️ Все товары удалены');
+        await clearGoogleSheet();
     }
 
     // ===================== СИНХРОНИЗАЦИЯ =====================
+    async function saveToGoogle() {
+        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
+            return false;
+        }
+
+        try {
+            updateSyncStatus('yellow', 'Сохранение...');
+            await clearGoogleSheet();
+            for (const product of products) {
+                await addToGoogle(product);
+            }
+            updateSyncStatus('green', `Сохранено (${products.length})`);
+            return true;
+        } catch (error) {
+            console.error('Ошибка сохранения:', error);
+            updateSyncStatus('red', 'Ошибка сохранения');
+            return false;
+        }
+    }
+
     async function syncWithGoogle() {
         if (isSyncing) return;
         isSyncing = true;
@@ -2313,6 +2346,8 @@
         }
 
         try {
+            await loadFromGoogle();
+            await saveToGoogle();
             await loadFromGoogle();
             showToast('✅ Синхронизация завершена!');
         } catch (error) {
