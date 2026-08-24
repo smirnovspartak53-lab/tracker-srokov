@@ -897,7 +897,7 @@
 
 <script>
     // ============================================
-    // КОНФИГУРАЦИЯ
+    //  КОНФИГУРАЦИЯ
     // ============================================
     const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE';
     const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4';
@@ -905,7 +905,6 @@
 
     const SHEET_READ_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
     const SHEET_APPEND_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
-    const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
 
     let products = [];
     let currentFilter = 'all';
@@ -1153,9 +1152,10 @@
         }
     }
 
-    // Удаление товара из Google
+    // Удаление товара из Google (перезаписываем таблицу)
     async function deleteFromGoogle(product) {
         try {
+            // Читаем все данные
             const response = await fetch(SHEET_READ_URL);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -1165,6 +1165,7 @@
             const header = data.values[0] || ['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности'];
             const rows = data.values.slice(1);
             
+            // Фильтруем удаляемый товар
             const newRows = rows.filter(row => {
                 if (row.length < 1) return true;
                 const rowBarcode = row[1] || '';
@@ -1174,16 +1175,20 @@
                 const productName = product.name || '';
                 const productExpiry = product.expiry || '';
                 
+                // Если есть штрих-код — сравниваем по нему + сроку
                 if (productBarcode && rowBarcode === productBarcode && rowExpiry === productExpiry) return false;
+                // Если нет штрих-кода — сравниваем по названию + сроку
                 if (!productBarcode && rowName === productName && rowExpiry === productExpiry) return false;
                 return true;
             });
 
-            await fetch(SHEET_CLEAR_URL, {
+            // Очищаем таблицу
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
 
+            // Записываем заново
             if (newRows.length > 0) {
                 const allData = [header, ...newRows];
                 await fetch(SHEET_APPEND_URL, {
@@ -1200,33 +1205,17 @@
         }
     }
 
-    // Очистка всей таблицы
-    async function clearGoogleSheet() {
-        try {
-            await fetch(SHEET_CLEAR_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
-            await fetch(SHEET_APPEND_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ values: header })
-            });
-            return true;
-        } catch (error) {
-            console.error('Ошибка очистки:', error);
-            return false;
-        }
-    }
-
     // ===================== ЛОКАЛЬНОЕ ХРАНИЛИЩЕ =====================
     function loadFromLocal() {
         const saved = localStorage.getItem('products_tracker_local');
         if (saved) {
             try { products = JSON.parse(saved); } catch(e) { products = []; }
         } else {
-            products = [];
+            products = [
+                { id: '1', name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка', expiry: getDateStr(2) },
+                { id: '2', name: 'Кетчуп Махеев', barcode: '4604258008505', weight: '350г', department: 'Соусы', expiry: getDateStr(5) },
+                { id: '3', name: 'Соль', barcode: '4601234567892', weight: '', department: 'Специи', expiry: getDateStr(180) }
+            ];
             saveToLocal();
         }
         render();
@@ -1916,6 +1905,11 @@
         render();
         closeAddToDepartmentModal();
         showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`);
+        
+        // Сбрасываем фильтр отделов
+        document.querySelectorAll('.dept-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector('.dept-btn-all').classList.add('active');
+        currentDepartment = 'all';
     }
 
     // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
@@ -2025,10 +2019,11 @@
         const product = products.find(p => p.id === productId);
         if (!product || !product.department) { showToast('ℹ️ Товар не привязан к отделу'); return; }
         
+        const deptName = product.department;
         product.department = '';
         saveToLocal();
         render();
-        showToast(`✅ Товар удалён из отдела`);
+        showToast(`✅ Товар удалён из отдела "${deptName}"`);
     }
 
     async function clearDepartment() {
@@ -2155,7 +2150,6 @@
         saveToLocal();
         render();
         showToast('🗑️ Все товары удалены');
-        await clearGoogleSheet();
     }
 
     // ===================== СИНХРОНИЗАЦИЯ =====================
@@ -2166,10 +2160,22 @@
         showToast('🔄 Синхронизация...');
         try {
             await loadFromGoogle();
-            // Сохраняем локальные изменения в таблицу
-            await clearGoogleSheet();
-            for (const product of products) {
-                await addToGoogle(product);
+            // Сохраняем все товары в таблицу (перезаписываем)
+            // Сначала очищаем
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            // Записываем все товары
+            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
+            const rows = products.map(p => [p.name, p.barcode || '', p.weight || '', p.department || '', p.expiry || '']);
+            const allData = [header, ...rows];
+            if (allData.length > 1) {
+                await fetch(SHEET_APPEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ values: allData })
+                });
             }
             await loadFromGoogle();
             showToast('✅ Синхронизация завершена!');
