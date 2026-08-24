@@ -6,6 +6,7 @@
     <title>📦 Трекер сроков годности</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
+        /* ===== СТИЛИ (ТЕ ЖЕ, ЧТО И БЫЛИ) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; padding-bottom: 80px; color: #1a1a1a; transition: background 0.3s, color 0.3s; }
         body.dark { background: #1a1a1a; color: #e0e0e0; }
@@ -320,6 +321,11 @@
         #pdfContainer .orange { color: #e67e22; }
         #pdfContainer .yellow { color: #f39c12; }
         #pdfContainer .green { color: #27ae60; }
+
+        /* ===== ДОПОЛНИТЕЛЬНЫЙ СТИЛЬ ДЛЯ ФОТО ===== */
+        .product-photo { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: 1px solid #e0e0e0; flex-shrink: 0; }
+        .photo-preview { max-width: 200px; max-height: 200px; border-radius: 12px; border: 2px solid #667eea; }
+        .photo-placeholder { width: 40px; height: 40px; border-radius: 8px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #ccc; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -461,20 +467,18 @@
 
 <div id="pdfContainer"></div>
 
-<!-- Модалка напоминаний -->
+<!-- ===== МОДАЛКИ ===== -->
+
+<!-- Напоминания -->
 <div class="modal-overlay" id="remindersModal">
     <div class="modal">
         <h2>🔔 Умные напоминания</h2>
-        <div id="remindersList">
-            <div style="text-align:center;color:#999;padding:20px;">Загрузка...</div>
-        </div>
-        <div class="modal-actions">
-            <button class="btn btn-close-modal" onclick="closeRemindersModal()">Закрыть</button>
-        </div>
+        <div id="remindersList"><div style="text-align:center;color:#999;padding:20px;">Загрузка...</div></div>
+        <div class="modal-actions"><button class="btn btn-close-modal" onclick="closeRemindersModal()">Закрыть</button></div>
     </div>
 </div>
 
-<!-- Модалка редактора по отделам (с поиском) -->
+<!-- Редактор -->
 <div class="modal-overlay" id="editByDepartmentModal">
     <div class="modal">
         <h2>✏️ Редактор товаров</h2>
@@ -483,7 +487,7 @@
             <input type="text" id="editSearchInput" class="search-box" placeholder="Введите название товара..." oninput="renderEditProducts()">
         </div>
         <div class="form-group">
-            <label>🏪 Фильтр по отделу (необязательно)</label>
+            <label>🏪 Фильтр по отделу</label>
             <select id="editDepartmentSelect" onchange="renderEditProducts()">
                 <option value="">Все отделы</option>
                 <option value="Соусы">🥫 Соусы</option>
@@ -510,13 +514,11 @@
         <div id="editProductsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
             <div style="padding: 20px; text-align: center; color: #999;">Введите название для поиска</div>
         </div>
-        <div class="modal-actions">
-            <button class="btn btn-close-modal" onclick="closeEditByDepartmentModal()">Закрыть</button>
-        </div>
+        <div class="modal-actions"><button class="btn btn-close-modal" onclick="closeEditByDepartmentModal()">Закрыть</button></div>
     </div>
 </div>
 
-<!-- Модалка редактирования товара -->
+<!-- Редактирование товара -->
 <div class="modal-overlay" id="editProductModal">
     <div class="modal">
         <h2>✏️ Редактировать товар</h2>
@@ -567,6 +569,17 @@
                     <input type="text" id="editProductExpiry" placeholder="ДД.ММ.ГГГГ">
                 </div>
             </div>
+            <div class="form-group">
+                <label>📷 Фото товара</label>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-primary" onclick="editTakePhoto()" style="flex:1;">📷 Снять фото</button>
+                    <button type="button" class="btn btn-danger" onclick="editClearPhoto()" style="flex:1;">🗑️ Удалить</button>
+                </div>
+                <div id="editPhotoPreview" style="margin-top:10px; display:none; text-align:center;">
+                    <img id="editProductPhoto" src="" alt="Фото" class="photo-preview">
+                </div>
+                <input type="hidden" id="editProductPhotoData" value="">
+            </div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeEditProductModal()">Отмена</button>
@@ -575,27 +588,24 @@
     </div>
 </div>
 
-<!-- Модалка добавления -->
+<!-- Добавление товара -->
 <div class="modal-overlay" id="addModal">
     <div class="modal">
         <h2>➕ Добавить товар</h2>
         <div class="form-group">
-            <label>📝 Название товара <span style="color:red;">*</span></label>
-            <textarea id="productName" placeholder="Например: Кетчуп Махеев Болгарский" rows="2"></textarea>
+            <label>📝 Название <span style="color:red;">*</span></label>
+            <textarea id="productName" placeholder="Например: Кетчуп Махеев" rows="2"></textarea>
         </div>
         <div class="form-group">
             <label>🔢 Штрих-код</label>
-            <input type="text" id="productBarcode" placeholder="Например: 4604258008505">
+            <input type="text" id="productBarcode" placeholder="4604258008505">
         </div>
         <div class="form-group">
-            <label>⚖️ Вес / Объём <span style="color:#888; font-weight:400;">(необязательно)</span></label>
-            <input type="text" id="productWeight" placeholder="Например: 350г, 0.4кг, 500мл, 0.5л">
-            <div style="font-size: 11px; color: #888; margin-top: 4px;">
-                📌 Поддерживаются: <b>г</b>, <b>кг</b>, <b>мл</b>, <b>л</b>
-            </div>
+            <label>⚖️ Вес / Объём</label>
+            <input type="text" id="productWeight" placeholder="350г, 1л">
         </div>
         <div class="form-group">
-            <label>🏪 Отдел/Витрина</label>
+            <label>🏪 Отдел</label>
             <select id="productDepartment">
                 <option value="">Выберите отдел</option>
                 <option value="Соусы">🥫 Соусы</option>
@@ -621,10 +631,18 @@
         </div>
         <div class="form-group">
             <label>📅 Срок годности (ДД.ММ.ГГГГ) <span style="color:red;">*</span></label>
-            <input type="text" id="productExpiry" placeholder="Например: 25.07.2026">
-            <div style="font-size: 11px; color: #888; margin-top: 4px;">
-                💡 Используйте <b>калькулятор</b> для расчета даты
+            <input type="text" id="productExpiry" placeholder="25.07.2026">
+        </div>
+        <div class="form-group">
+            <label>📷 Фото товара</label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" onclick="takePhoto()" style="flex:1;">📷 Снять фото</button>
+                <button type="button" class="btn btn-danger" onclick="clearPhoto()" style="flex:1;">🗑️ Удалить</button>
             </div>
+            <div id="photoPreview" style="margin-top:10px; display:none; text-align:center;">
+                <img id="productPhoto" src="" alt="Фото" class="photo-preview">
+            </div>
+            <input type="hidden" id="productPhotoData" value="">
         </div>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeAddModal()">Отмена</button>
@@ -633,11 +651,10 @@
     </div>
 </div>
 
-<!-- Модалка шаблона -->
+<!-- Шаблоны -->
 <div class="modal-overlay" id="templateModal">
     <div class="modal">
         <h2>📋 Управление шаблонами</h2>
-
         <div class="template-add-form">
             <div style="font-weight:600; margin-bottom:8px; font-size:14px;">➕ Добавить шаблон</div>
             <div class="form-row">
@@ -645,7 +662,7 @@
                 <input type="text" id="templateAddBarcode" placeholder="Штрих-код" style="flex:1;">
             </div>
             <div class="form-row" style="margin-top:6px;">
-                <input type="text" id="templateAddWeight" placeholder="Вес/Объём" style="flex:1;">
+                <input type="text" id="templateAddWeight" placeholder="Вес" style="flex:1;">
                 <select id="templateAddDepartment" style="flex:1;">
                     <option value="">Отдел</option>
                     <option value="Соусы">🥫 Соусы</option>
@@ -671,7 +688,6 @@
             </div>
             <button class="btn btn-template-add" onclick="addTemplateItem()" style="margin-top:8px; width:100%;">➕ Добавить в шаблоны</button>
         </div>
-
         <div class="form-group">
             <label>🏪 Фильтр по отделу</label>
             <select id="templateFilterDept" onchange="renderTemplateList()">
@@ -697,17 +713,15 @@
                 <option value="Другое">📦 Другое</option>
             </select>
         </div>
-
         <div class="form-group">
-            <label>📋 Шаблоны товаров:</label>
-            <div id="templateItemsList" style="max-height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <div style="padding: 20px; text-align: center; color: #999;">Загрузка шаблонов...</div>
+            <label>📋 Шаблоны:</label>
+            <div id="templateItemsList" style="max-height:250px; overflow-y:auto; border:1px solid #e0e0e0; border-radius:8px;">
+                <div style="padding:20px; text-align:center; color:#999;">Загрузка...</div>
             </div>
         </div>
-
         <div class="form-group">
-            <label>📅 Срок годности для добавления (ДД.ММ.ГГГГ) <span style="color:red;">*</span></label>
-            <input type="text" id="templateExpiry" placeholder="Например: 25.07.2026">
+            <label>📅 Срок годности <span style="color:red;">*</span></label>
+            <input type="text" id="templateExpiry" placeholder="25.07.2026">
         </div>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeTemplateModal()">Отмена</button>
@@ -716,35 +730,33 @@
     </div>
 </div>
 
-<!-- Модалка статистики -->
+<!-- Статистика -->
 <div class="modal-overlay" id="statsModal">
     <div class="modal">
         <h2>📊 Детальная статистика</h2>
         <div class="stats-modal-grid">
-            <div class="stats-modal-item blue"><div class="number" id="statsTotal">0</div><div class="label">Всего товаров</div></div>
-            <div class="stats-modal-item purple"><div class="number" id="statsDepartments">0</div><div class="label">Всего отделов</div></div>
-            <div class="stats-modal-item"><div class="number" id="statsAvgExpiry">0</div><div class="label">Средний срок (дней)</div></div>
+            <div class="stats-modal-item blue"><div class="number" id="statsTotal">0</div><div class="label">Всего</div></div>
+            <div class="stats-modal-item purple"><div class="number" id="statsDepartments">0</div><div class="label">Отделов</div></div>
+            <div class="stats-modal-item"><div class="number" id="statsAvgExpiry">0</div><div class="label">Средний срок</div></div>
             <div class="stats-modal-item red"><div class="number" id="statsExpired">0</div><div class="label">Просрочено</div></div>
             <div class="stats-modal-item orange"><div class="number" id="statsWeek">0</div><div class="label">2-7 дней</div></div>
             <div class="stats-modal-item yellow"><div class="number" id="statsExpiring">0</div><div class="label">0-1 день</div></div>
-            <div class="stats-modal-item green"><div class="number" id="statsOk">0</div><div class="label">В порядке (>7 дней)</div></div>
+            <div class="stats-modal-item green"><div class="number" id="statsOk">0</div><div class="label">В порядке</div></div>
             <div class="stats-modal-item"><div class="number" id="statsNoDept">0</div><div class="label">Без отдела</div></div>
             <div class="stats-modal-item"><div class="number" id="statsWithBarcode">0</div><div class="label">Со штрих-кодом</div></div>
         </div>
-        <div style="margin-top: 8px; font-weight:600; font-size:14px;">📊 По отделам:</div>
+        <div style="margin-top:8px; font-weight:600; font-size:14px;">📊 По отделам:</div>
         <div class="stats-dept-list" id="statsDepartmentsList"></div>
-        <div class="modal-actions">
-            <button class="btn btn-close-modal" onclick="closeStatsModal()">Закрыть</button>
-        </div>
+        <div class="modal-actions"><button class="btn btn-close-modal" onclick="closeStatsModal()">Закрыть</button></div>
     </div>
 </div>
 
-<!-- Модалка добавления в отдел с поиском -->
+<!-- Добавление в отдел -->
 <div class="modal-overlay" id="addToDepartmentModal">
     <div class="modal">
-        <h2>🏷️ Добавить товары в отдел</h2>
+        <h2>🏷️ Добавить в отдел</h2>
         <div class="form-group">
-            <label>Выберите отдел <span style="color:red;">*</span></label>
+            <label>Отдел <span style="color:red;">*</span></label>
             <select id="targetDepartment">
                 <option value="">Выберите отдел</option>
                 <option value="Соусы">🥫 Соусы</option>
@@ -769,34 +781,34 @@
             </select>
         </div>
         <div class="form-group">
-            <label>🔍 Поиск товара</label>
-            <input type="text" id="addSearchInput" class="search-box" placeholder="Введите название или штрих-код..." oninput="filterAddProducts()">
+            <label>🔍 Поиск</label>
+            <input type="text" id="addSearchInput" class="search-box" placeholder="Поиск..." oninput="filterAddProducts()">
         </div>
         <div class="form-group">
-            <label>Выберите товары для добавления в отдел</label>
+            <label>Выберите товары</label>
             <div class="select-actions">
                 <button class="btn btn-primary" onclick="selectAllProducts()" style="flex:1;">✅ Выбрать все</button>
                 <button class="btn btn-close-modal" onclick="deselectAllProducts()" style="flex:1;">❌ Снять все</button>
             </div>
-            <div id="productSelectList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <div style="padding: 20px; text-align: center; color: #999;">Загрузка товаров...</div>
+            <div id="productSelectList" style="max-height:300px; overflow-y:auto; border:1px solid #e0e0e0; border-radius:8px;">
+                <div style="padding:20px; text-align:center; color:#999;">Загрузка...</div>
             </div>
-            <div class="selected-count" id="selectedCount">Выбрано: 0 товаров</div>
+            <div class="selected-count" id="selectedCount">Выбрано: 0</div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeAddToDepartmentModal()">Отмена</button>
-            <button class="btn btn-purple" onclick="addSelectedToDepartment()">🏷️ Добавить в отдел</button>
+            <button class="btn btn-purple" onclick="addSelectedToDepartment()">🏷️ Добавить</button>
         </div>
     </div>
 </div>
 
-<!-- Модалка удаления из отдела с поиском -->
+<!-- Удаление из отдела -->
 <div class="modal-overlay" id="removeFromDepartmentModal">
     <div class="modal">
-        <h2>🚫 Удалить товары из отдела</h2>
-        <p style="text-align: center; color: #666; margin-bottom: 16px;">Товары останутся в базе, но будут удалены из выбранного отдела</p>
+        <h2>🚫 Удалить из отдела</h2>
+        <p style="text-align:center; color:#666; margin-bottom:16px;">Товары останутся в базе, но без отдела</p>
         <div class="form-group">
-            <label>Выберите отдел для очистки <span style="color:red;">*</span></label>
+            <label>Отдел <span style="color:red;">*</span></label>
             <select id="removeDepartment">
                 <option value="">Выберите отдел</option>
                 <option value="Соусы">🥫 Соусы</option>
@@ -821,32 +833,32 @@
             </select>
         </div>
         <div class="form-group">
-            <label>🔍 Поиск товара</label>
-            <input type="text" id="removeSearchInput" class="search-box" placeholder="Введите название или штрих-код..." oninput="filterRemoveProducts()">
+            <label>🔍 Поиск</label>
+            <input type="text" id="removeSearchInput" class="search-box" placeholder="Поиск..." oninput="filterRemoveProducts()">
         </div>
         <div class="form-group">
-            <label>Выберите товары для удаления из отдела</label>
+            <label>Выберите товары</label>
             <div class="select-actions">
                 <button class="btn btn-primary" onclick="selectAllRemoveProducts()" style="flex:1;">✅ Выбрать все</button>
                 <button class="btn btn-close-modal" onclick="deselectAllRemoveProducts()" style="flex:1;">❌ Снять все</button>
             </div>
-            <div id="removeProductSelectList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <div style="padding: 20px; text-align: center; color: #999;">Загрузка товаров...</div>
+            <div id="removeProductSelectList" style="max-height:300px; overflow-y:auto; border:1px solid #e0e0e0; border-radius:8px;">
+                <div style="padding:20px; text-align:center; color:#999;">Загрузка...</div>
             </div>
-            <div class="selected-count" id="removeSelectedCount">Выбрано: 0 товаров</div>
+            <div class="selected-count" id="removeSelectedCount">Выбрано: 0</div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeRemoveFromDepartmentModal()">Отмена</button>
-            <button class="btn btn-remove-dept" onclick="removeSelectedFromDepartment()">🚫 Удалить из отдела</button>
+            <button class="btn btn-remove-dept" onclick="removeSelectedFromDepartment()">🚫 Удалить</button>
         </div>
     </div>
 </div>
 
-<!-- Модалка удаления товара -->
+<!-- Удаление товара -->
 <div class="modal-overlay" id="deleteModal">
     <div class="modal">
         <h2>🗑️ Удалить товар?</h2>
-        <p style="text-align: center; margin-bottom: 20px; color: #666;" id="deleteConfirmText"></p>
+        <p style="text-align:center; margin-bottom:20px; color:#666;" id="deleteConfirmText"></p>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeDeleteModal()">Отмена</button>
             <button class="btn btn-danger" onclick="confirmDelete()">Удалить</button>
@@ -854,47 +866,32 @@
     </div>
 </div>
 
-<!-- Модалка экспорта -->
+<!-- Экспорт -->
 <div class="modal-overlay" id="exportModal">
     <div class="modal">
         <h2>📤 Экспорт CSV</h2>
         <div class="form-group">
-            <label>Выберите тип экспорта:</label>
+            <label>Тип экспорта:</label>
             <div class="export-options">
-                <label>
-                    <input type="radio" name="exportType" value="all" checked onchange="toggleExportProducts()">
-                    📋 Все товары (<span id="exportAllCount">0</span> шт.)
-                </label>
-                <label>
-                    <input type="radio" name="exportType" value="filtered" onchange="toggleExportProducts()">
-                    🔍 Только отфильтрованные (<span id="exportFilteredCount">0</span> шт.)
-                </label>
-                <label>
-                    <input type="radio" name="exportType" value="expiring" onchange="toggleExportProducts()">
-                    ⚠️ Истекают 0-7 дней (<span id="exportExpiringCount">0</span> шт.)
-                </label>
-                <label>
-                    <input type="radio" name="exportType" value="expired" onchange="toggleExportProducts()">
-                    ❌ Просроченные (<span id="exportExpiredCount">0</span> шт.)
-                </label>
-                <label>
-                    <input type="radio" name="exportType" value="selected" onchange="toggleExportProducts()">
-                    ☑️ Выбранные вручную
-                </label>
+                <label><input type="radio" name="exportType" value="all" checked onchange="toggleExportProducts()"> 📋 Все (<span id="exportAllCount">0</span>)</label>
+                <label><input type="radio" name="exportType" value="filtered" onchange="toggleExportProducts()"> 🔍 Отфильтрованные (<span id="exportFilteredCount">0</span>)</label>
+                <label><input type="radio" name="exportType" value="expiring" onchange="toggleExportProducts()"> ⚠️ 0-7 дней (<span id="exportExpiringCount">0</span>)</label>
+                <label><input type="radio" name="exportType" value="expired" onchange="toggleExportProducts()"> ❌ Просроченные (<span id="exportExpiredCount">0</span>)</label>
+                <label><input type="radio" name="exportType" value="selected" onchange="toggleExportProducts()"> ☑️ Выбранные</label>
             </div>
         </div>
-        <div class="form-group" id="selectedProductsGroup" style="display: none;">
-            <label>Выберите товары для экспорта:</label>
+        <div class="form-group" id="selectedProductsGroup" style="display:none;">
+            <label>Выберите товары:</label>
             <div class="export-products-list" id="exportProductsList"></div>
-            <div class="select-actions" style="margin-top: 8px;">
+            <div class="select-actions" style="margin-top:8px;">
                 <button class="btn btn-primary" onclick="selectAllExportProducts()" style="flex:1;">✅ Выбрать все</button>
                 <button class="btn btn-close-modal" onclick="deselectAllExportProducts()" style="flex:1;">❌ Снять все</button>
             </div>
-            <div class="selected-count" id="exportSelectedCount">Выбрано: 0 товаров</div>
+            <div class="selected-count" id="exportSelectedCount">Выбрано: 0</div>
         </div>
         <div class="modal-actions">
             <button class="btn btn-close-modal" onclick="closeExportModal()">Отмена</button>
-            <button class="btn btn-success" onclick="exportSelectedData()">📥 Скачать CSV</button>
+            <button class="btn btn-success" onclick="exportSelectedData()">📥 Скачать</button>
         </div>
     </div>
 </div>
@@ -911,8 +908,9 @@
 
     // Базовые URL для Google Sheets API
     const SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
-    const SHEET_UPDATE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
+    const SHEET_APPEND_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
     const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
+    const SHEET_BATCH_UPDATE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:batchUpdate?key=${GOOGLE_API_KEY}`;
 
     let products = [];
     let currentFilter = 'all';
@@ -929,6 +927,9 @@
     let calculatedExpiry = '';
     let templates = [];
     let editTargetId = null;
+
+    let photoData = null;
+    let editPhotoData = null;
 
     // ===================== ТЕМА =====================
     function toggleTheme() {
@@ -979,11 +980,7 @@
 
     function getTodayDMY() {
         const now = new Date();
-        return {
-            day: now.getDate(),
-            month: now.getMonth(),
-            year: now.getFullYear()
-        };
+        return { day: now.getDate(), month: now.getMonth(), year: now.getFullYear() };
     }
 
     function getDaysLeftFromDate(dateStr) {
@@ -1021,6 +1018,16 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function getProductKey(product) {
+        const name = (product.name || '').trim().toLowerCase();
+        const barcode = (product.barcode || '').trim();
+        const expiry = (product.expiry || '').trim();
+        if (barcode) {
+            return `barcode_${barcode}_${expiry}`;
+        }
+        return `name_${name}_${expiry}`;
     }
 
     // ===================== ВЕС =====================
@@ -1080,6 +1087,81 @@
         return `${daysLeft} дн.`;
     }
 
+    // ===================== ФОТО =====================
+    function takePhoto() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            input.capture = 'environment';
+        }
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const dataUrl = event.target.result;
+                    photoData = dataUrl;
+                    document.getElementById('productPhotoData').value = dataUrl;
+                    document.getElementById('productPhoto').src = dataUrl;
+                    document.getElementById('photoPreview').style.display = 'block';
+                    showToast('✅ Фото сохранено');
+                };
+                reader.readAsDataURL(file);
+            }
+            document.body.removeChild(input);
+        };
+        input.click();
+    }
+
+    function clearPhoto() {
+        photoData = null;
+        document.getElementById('productPhotoData').value = '';
+        document.getElementById('productPhoto').src = '';
+        document.getElementById('photoPreview').style.display = 'none';
+        showToast('🗑️ Фото удалено');
+    }
+
+    function editTakePhoto() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            input.capture = 'environment';
+        }
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const dataUrl = event.target.result;
+                    editPhotoData = dataUrl;
+                    document.getElementById('editProductPhotoData').value = dataUrl;
+                    document.getElementById('editProductPhoto').src = dataUrl;
+                    document.getElementById('editPhotoPreview').style.display = 'block';
+                    showToast('✅ Фото сохранено');
+                };
+                reader.readAsDataURL(file);
+            }
+            document.body.removeChild(input);
+        };
+        input.click();
+    }
+
+    function editClearPhoto() {
+        editPhotoData = null;
+        document.getElementById('editProductPhotoData').value = '';
+        document.getElementById('editProductPhoto').src = '';
+        document.getElementById('editPhotoPreview').style.display = 'none';
+        showToast('🗑️ Фото удалено');
+    }
+
     // ===================== РАБОТА С GOOGLE =====================
     function updateSyncStatus(color, text) {
         document.getElementById('syncDot').className = 'dot ' + color;
@@ -1110,19 +1192,20 @@
 
             const data = await response.json();
             
-            if (data && data.values && data.values.length > 0) {
+            if (data && data.values && data.values.length > 1) {
                 const rows = data.values.slice(1);
                 const localProducts = [];
 
                 rows.forEach(row => {
-                    if (row.length >= 5 && row[0] && row[0].trim()) {
+                    if (row.length >= 1 && row[0] && row[0].trim()) {
                         localProducts.push({
                             id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                             name: row[0] || 'Без названия',
                             barcode: row[1] || '',
                             weight: row[2] || '',
                             department: row[3] || '',
-                            expiry: normalizeDate(row[4] || getDateStr(7))
+                            expiry: normalizeDate(row[4] || getDateStr(7)),
+                            photo: row[5] || ''
                         });
                     }
                 });
@@ -1151,7 +1234,7 @@
         }
     }
 
-    // Добавление товара в Google
+    // Добавление товара в Google (одна строка)
     async function addToGoogle(product) {
         if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
             return false;
@@ -1163,10 +1246,11 @@
                 product.barcode || '',
                 product.weight || '',
                 product.department || '',
-                product.expiry || ''
+                product.expiry || '',
+                product.photo || ''
             ]];
 
-            const response = await fetch(SHEET_UPDATE_URL, {
+            const response = await fetch(SHEET_APPEND_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1201,12 +1285,26 @@
                 return false;
             }
 
-            const header = data.values[0] || ['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности'];
+            const header = data.values[0] || ['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности', 'Фото'];
             const rows = data.values.slice(1);
             
             const newRows = rows.filter(row => {
-                if (row.length < 5) return true;
-                return !(row[1] === product.barcode && row[4] === product.expiry && row[0] === product.name);
+                if (row.length < 1) return true;
+                const rowName = row[0] || '';
+                const rowBarcode = row[1] || '';
+                const rowExpiry = row[4] || '';
+                const productBarcode = product.barcode || '';
+                const productName = product.name || '';
+                const productExpiry = product.expiry || '';
+                
+                // Сравниваем по штрих-коду + названию + сроку
+                if (productBarcode && rowBarcode === productBarcode && rowExpiry === productExpiry) {
+                    return false;
+                }
+                if (!productBarcode && rowName === productName && rowExpiry === productExpiry) {
+                    return false;
+                }
+                return true;
             });
 
             await fetch(SHEET_CLEAR_URL, {
@@ -1216,7 +1314,7 @@
 
             if (newRows.length > 0) {
                 const allData = [header, ...newRows];
-                await fetch(SHEET_UPDATE_URL, {
+                await fetch(SHEET_APPEND_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ values: allData })
@@ -1244,8 +1342,8 @@
             });
             console.log('✅ Таблица очищена');
             
-            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
-            await fetch(SHEET_UPDATE_URL, {
+            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности', 'Фото']];
+            await fetch(SHEET_APPEND_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ values: header })
@@ -1264,11 +1362,7 @@
         if (saved) {
             try { products = JSON.parse(saved); } catch(e) { products = []; }
         } else {
-            products = [
-                { id: '1', name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка', expiry: getDateStr(2) },
-                { id: '2', name: 'Кетчуп Махеев', barcode: '4604258008505', weight: '350г', department: 'Соусы', expiry: getDateStr(5) },
-                { id: '3', name: 'Соль', barcode: '4601234567892', weight: '', department: 'Специи', expiry: getDateStr(180) }
-            ];
+            products = [];
             saveToLocal();
         }
         render();
@@ -1609,11 +1703,20 @@
             }
             const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
             const expiryDisplay = formatDateForList(p.expiry);
+            
+            let photoHtml = '';
+            if (p.photo && p.photo.startsWith('data:image')) {
+                photoHtml = `<img src="${p.photo}" class="product-photo" alt="Фото">`;
+            } else {
+                photoHtml = `<div class="photo-placeholder">📷</div>`;
+            }
+            
             const removeDeptBtn = p.department ? 
                 `<button class="btn-icon remove-dept" onclick="event.stopPropagation(); removeFromDepartment('${p.id}')" title="Удалить из отдела">🚫</button>` : '';
             
             html += `
                 <div class="product-item" onclick="openEditProductModal('${p.id}')">
+                    ${photoHtml}
                     <div class="product-status ${status.class}"></div>
                     <div class="product-info">
                         <div class="product-name">${escapeHtml(p.name)}</div>
@@ -1706,12 +1809,25 @@
         document.getElementById('editProductDepartment').value = product.department || '';
         document.getElementById('editProductExpiry').value = product.expiry || '';
 
+        if (product.photo && product.photo.startsWith('data:image')) {
+            editPhotoData = product.photo;
+            document.getElementById('editProductPhotoData').value = product.photo;
+            document.getElementById('editProductPhoto').src = product.photo;
+            document.getElementById('editPhotoPreview').style.display = 'block';
+        } else {
+            editPhotoData = null;
+            document.getElementById('editProductPhotoData').value = '';
+            document.getElementById('editProductPhoto').src = '';
+            document.getElementById('editPhotoPreview').style.display = 'none';
+        }
+
         document.getElementById('editProductModal').classList.add('active');
     }
 
     function closeEditProductModal() {
         document.getElementById('editProductModal').classList.remove('active');
         editTargetId = null;
+        editClearPhoto();
     }
 
     function saveEditProduct() {
@@ -1739,6 +1855,8 @@
 
         const product = products[productIndex];
         const oldName = product.name;
+        const oldBarcode = product.barcode;
+        const oldExpiry = product.expiry;
 
         if (barcode) {
             const exists = products.some(p => p.barcode === barcode && p.id !== id && p.expiry === parsed.raw);
@@ -1753,12 +1871,23 @@
         product.weight = weight;
         product.department = department;
         product.expiry = parsed.raw;
+        
+        if (editPhotoData) {
+            product.photo = editPhotoData;
+        } else {
+            delete product.photo;
+        }
 
         saveToLocal();
         render();
         closeEditProductModal();
         showToast(`✅ Товар "${oldName}" обновлён`, 'success');
         updateSyncStatus('green', `Обновлено (${products.length})`);
+        
+        // Обновляем в Google: удаляем старый, добавляем новый
+        deleteFromGoogle({ name: oldName, barcode: oldBarcode, expiry: oldExpiry }).then(() => {
+            addToGoogle(product);
+        });
     }
 
     // ===================== ШАБЛОНЫ =====================
@@ -2188,20 +2317,20 @@
     // ===================== МОДАЛКИ =====================
     function openAddModal() {
         document.getElementById('addModal').classList.add('active');
-        if (!document.getElementById('productBarcode').value) {
-            document.getElementById('productName').value = '';
-            document.getElementById('productBarcode').value = '';
-            document.getElementById('productWeight').value = '';
-            document.getElementById('productDepartment').value = '';
-            document.getElementById('productExpiry').value = '';
-        }
+        document.getElementById('productName').value = '';
+        document.getElementById('productBarcode').value = '';
+        document.getElementById('productWeight').value = '';
+        document.getElementById('productDepartment').value = '';
+        document.getElementById('productExpiry').value = '';
         document.getElementById('productExpiry').style.borderColor = '';
         document.getElementById('productExpiry').style.background = '';
+        clearPhoto();
         setTimeout(() => document.getElementById('productName').focus(), 100);
     }
 
     function closeAddModal() {
         document.getElementById('addModal').classList.remove('active');
+        clearPhoto();
     }
 
     function openDeleteModal(id) {
@@ -2251,6 +2380,10 @@
             department: department || '',
             expiry: parsed.raw
         };
+
+        if (photoData) {
+            newProduct.photo = photoData;
+        }
 
         products.push(newProduct);
         saveToLocal();
@@ -2315,26 +2448,6 @@
     }
 
     // ===================== СИНХРОНИЗАЦИЯ =====================
-    async function saveToGoogle() {
-        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
-            return false;
-        }
-
-        try {
-            updateSyncStatus('yellow', 'Сохранение...');
-            await clearGoogleSheet();
-            for (const product of products) {
-                await addToGoogle(product);
-            }
-            updateSyncStatus('green', `Сохранено (${products.length})`);
-            return true;
-        } catch (error) {
-            console.error('Ошибка сохранения:', error);
-            updateSyncStatus('red', 'Ошибка сохранения');
-            return false;
-        }
-    }
-
     async function syncWithGoogle() {
         if (isSyncing) return;
         isSyncing = true;
@@ -2347,7 +2460,11 @@
 
         try {
             await loadFromGoogle();
-            await saveToGoogle();
+            // Сохраняем локальные изменения в таблицу
+            await clearGoogleSheet();
+            for (const product of products) {
+                await addToGoogle(product);
+            }
             await loadFromGoogle();
             showToast('✅ Синхронизация завершена!');
         } catch (error) {
@@ -2504,13 +2621,13 @@
             return;
         }
         let csv = '\uFEFF';
-        csv += 'Название;Штрих-код;Вес/Объём;Отдел;Срок годности;Дней до срока;Статус\n';
+        csv += 'Название;Штрих-код;Вес/Объём;Отдел;Срок годности;Статус;Дней до срока\n';
         dataToExport.forEach(p => {
             const days = getDaysLeftFromDate(p.expiry);
             const status = getStatus(days);
             const expiryDisplay = formatDateForList(p.expiry);
             const barcode = p.barcode ? `="${p.barcode}"` : '';
-            csv += `"${p.name}";${barcode};"${p.weight || ''}";"${p.department || ''}";"${expiryDisplay}";${days};"${status.status}"\n`;
+            csv += `"${p.name}";${barcode};"${p.weight || ''}";"${p.department || ''}";"${expiryDisplay}";"${status.status}";${days}\n`;
         });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
