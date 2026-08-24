@@ -908,9 +908,14 @@
     // ============================================
     //  КОНФИГУРАЦИЯ
     // ============================================
-   const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE'; // ← ВАШ API-ключ
-    const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4'; // ← ВАШ ID таблицы
-    const SHEET_NAME = 'Лист1'; // Имя листа в таблице
+    const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE';
+    const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4';
+    const SHEET_NAME = 'Лист1';
+
+    // Базовые URL для Google Sheets API
+    const SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
+    const SHEET_UPDATE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
+    const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
 
     let products = [];
     let currentFilter = 'all';
@@ -919,13 +924,12 @@
     let deleteTargetId = null;
     let isSyncing = false;
     let currentTheme = 'light';
-    let searchQuery = ''; // Переменная для поиска
+    let searchQuery = '';
 
     let selectedProductIds = new Set();
     let removeSelectedProductIds = new Set();
     let exportSelectedIds = new Set();
     let calculatedExpiry = '';
-
     let templates = [];
     let editTargetId = null;
 
@@ -950,692 +954,6 @@
             document.body.classList.add('dark');
             currentTheme = 'dark';
         }
-    }
-
-    // ===================== УМНЫЕ НАПОМИНАНИЯ =====================
-    function checkReminders() {
-        let expired = 0;
-        let expiring = 0;
-        let reminders = [];
-
-        products.forEach(p => {
-            const days = getDaysLeftFromDate(p.expiry);
-            if (days < 0) {
-                expired++;
-                reminders.push({ product: p, days: days, type: 'danger', text: `Просрочен на ${Math.abs(days)} дней` });
-            } else if (days === 0 || days === 1) {
-                expiring++;
-                reminders.push({ product: p, days: days, type: 'warning', text: `Истекает ${days === 0 ? 'СЕГОДНЯ!' : 'ЗАВТРА!'}` });
-            }
-        });
-
-        const badge = document.getElementById('expiredBadge');
-        if (expired > 0) {
-            badge.textContent = expired;
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
-        }
-
-        const notifyBadge = document.getElementById('notifyBadge');
-        const total = expired + expiring;
-        if (total > 0) {
-            notifyBadge.textContent = total;
-            notifyBadge.style.display = 'inline-block';
-        } else {
-            notifyBadge.style.display = 'none';
-        }
-
-        return reminders;
-    }
-
-    function showReminders() {
-        const reminders = checkReminders();
-        const container = document.getElementById('remindersList');
-
-        if (reminders.length === 0) {
-            container.innerHTML = `
-                <div style="text-align:center;padding:30px;">
-                    <div style="font-size:48px;">🎉</div>
-                    <p style="color:#888;margin-top:10px;">Все товары в порядке!<br>Нет критических сроков.</p>
-                </div>
-            `;
-        } else {
-            let html = '';
-            reminders.forEach(r => {
-                const cls = r.type === 'danger' ? 'danger' : 'warning';
-                const daysCls = r.days < 0 ? 'red' : 'orange';
-                const daysText = r.days < 0 ? `${Math.abs(r.days)} дн.` : `${r.days} дн.`;
-                html += `
-                    <div class="reminder-item ${cls}">
-                        <div class="icon">${r.type === 'danger' ? '🚨' : '⚠️'}</div>
-                        <div class="text">
-                            <div class="title">${escapeHtml(r.product.name)}</div>
-                            <div class="sub">📅 ${formatDateForList(r.product.expiry)} ${r.product.department ? '🏪 ' + escapeHtml(r.product.department) : ''}</div>
-                            <div class="sub">${r.text}</div>
-                        </div>
-                        <div class="days ${daysCls}">${daysText}</div>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-        }
-
-        document.getElementById('remindersModal').classList.add('active');
-    }
-
-    function closeRemindersModal() {
-        document.getElementById('remindersModal').classList.remove('active');
-    }
-
-    function showExpiryWarning(product) {
-        const days = getDaysLeftFromDate(product.expiry);
-        if (days < 0) {
-            showToast(`🚨 Товар "${product.name}" ПРОСРОЧЕН!`, 'danger');
-        } else if (days === 0) {
-            showToast(`⚠️ Товар "${product.name}" истекает СЕГОДНЯ!`, 'warning');
-        } else if (days === 1) {
-            showToast(`⚠️ Товар "${product.name}" истекает ЗАВТРА!`, 'warning');
-        } else if (days <= 3) {
-            showToast(`⏳ Товар "${product.name}" истекает через ${days} дня`, 'warning');
-        }
-    }
-
-    // ===================== РЕДАКТОР ПО ОТДЕЛАМ (С ПОИСКОМ) =====================
-    function openEditByDepartmentModal() {
-        document.getElementById('editByDepartmentModal').classList.add('active');
-        document.getElementById('editSearchInput').value = '';
-        document.getElementById('editDepartmentSelect').value = '';
-        document.getElementById('editProductsList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Введите название для поиска</div>';
-        renderEditProducts();
-    }
-
-    function closeEditByDepartmentModal() {
-        document.getElementById('editByDepartmentModal').classList.remove('active');
-    }
-
-    function renderEditProducts() {
-        const container = document.getElementById('editProductsList');
-        const searchQuery = document.getElementById('editSearchInput').value.toLowerCase().trim();
-        const dept = document.getElementById('editDepartmentSelect').value;
-
-        let filtered = products;
-
-        // Фильтр по поиску
-        if (searchQuery) {
-            filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery));
-        }
-
-        // Фильтр по отделу
-        if (dept) {
-            filtered = filtered.filter(p => p.department === dept);
-        }
-
-        if (filtered.length === 0) {
-            let msg = 'Товары не найдены';
-            if (!searchQuery && !dept) msg = 'Введите название для поиска';
-            else if (searchQuery && dept) msg = `Нет товаров в отделе "${dept}" с названием "${searchQuery}"`;
-            else if (dept) msg = `Нет товаров в отделе "${dept}"`;
-            else if (searchQuery) msg = `Нет товаров с названием "${searchQuery}"`;
-            container.innerHTML = `<div style="padding:20px;text-align:center;color:#999;">${msg}</div>`;
-            return;
-        }
-
-        let html = '';
-        filtered.forEach(p => {
-            const days = getDaysLeftFromDate(p.expiry);
-            const status = getStatus(days);
-            html += `
-                <div class="edit-product-item" onclick="openEditProductModal('${p.id}')">
-                    <div class="status-dot ${status.class}"></div>
-                    <div class="info">
-                        <div class="name">${escapeHtml(p.name)}</div>
-                        <div class="details">
-                            ${p.barcode ? `🔢 ${escapeHtml(p.barcode)}` : ''}
-                            ${p.weight ? `⚖️ ${escapeHtml(p.weight)}` : ''}
-                            📅 ${formatDateForList(p.expiry)}
-                            ${p.department ? `🏪 ${escapeHtml(p.department)}` : ''}
-                        </div>
-                    </div>
-                    <div class="edit-icon">✏️</div>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-    }
-
-    function openEditProductModal(productId) {
-        const product = products.find(p => p.id === productId);
-        if (!product) return;
-
-        editTargetId = productId;
-        document.getElementById('editProductId').value = productId;
-        document.getElementById('editProductName').value = product.name;
-        document.getElementById('editProductBarcode').value = product.barcode || '';
-        document.getElementById('editProductWeight').value = product.weight || '';
-        document.getElementById('editProductDepartment').value = product.department || '';
-        document.getElementById('editProductExpiry').value = product.expiry || '';
-
-        document.getElementById('editProductModal').classList.add('active');
-    }
-
-    function closeEditProductModal() {
-        document.getElementById('editProductModal').classList.remove('active');
-        editTargetId = null;
-    }
-
-    // ===================== СОХРАНЕНИЕ РЕДАКТИРОВАНИЯ =====================
-    function saveEditProduct() {
-        const id = document.getElementById('editProductId').value;
-        const name = document.getElementById('editProductName').value.trim();
-        const barcode = document.getElementById('editProductBarcode').value.trim();
-        const weight = document.getElementById('editProductWeight').value.trim();
-        const department = document.getElementById('editProductDepartment').value;
-        const expiry = document.getElementById('editProductExpiry').value.trim();
-
-        if (!name) { showToast('❌ Введите название'); return; }
-        if (!expiry) { showToast('❌ Введите дату'); return; }
-
-        const parsed = parseDateDMY(expiry);
-        if (!parsed) {
-            showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ');
-            return;
-        }
-
-        const productIndex = products.findIndex(p => p.id === id);
-        if (productIndex === -1) { 
-            showToast('❌ Товар не найден'); 
-            return; 
-        }
-
-        const product = products[productIndex];
-        const oldName = product.name;
-        const oldBarcode = product.barcode;
-        const oldExpiry = product.expiry;
-
-        if (barcode) {
-            const exists = products.some(p => p.barcode === barcode && p.id !== id && p.expiry === parsed.raw);
-            if (exists) {
-                showToast('⚠️ Товар с таким штрих-кодом уже существует');
-                return;
-            }
-        }
-
-        product.name = name;
-        product.barcode = barcode;
-        product.weight = weight;
-        product.department = department;
-        product.expiry = parsed.raw;
-
-        saveToLocal();
-        render();
-        closeEditProductModal();
-        showToast(`✅ Товар "${oldName}" обновлён на "${name}"`, 'success');
-        
-        updateProductInGoogle(oldBarcode, oldExpiry, product).then(() => {
-            updateSyncStatus('green', `Обновлено (${products.length})`);
-        });
-    }
-
-    // ===================== ОБНОВЛЕНИЕ ТОВАРА В GOOGLE =====================
-    async function updateProductInGoogle(oldBarcode, oldExpiry, product) {
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            console.log('❌ ID не настроен');
-            return false;
-        }
-
-        try {
-            const response = await fetch(`${SHEET_URL}${sheetId}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const tableData = await response.json();
-            
-            let indexToUpdate = -1;
-            
-            if (oldBarcode) {
-                for (let i = 0; i < tableData.length; i++) {
-                    const row = tableData[i];
-                    if (row.barcode === oldBarcode && row.expiry === oldExpiry) {
-                        indexToUpdate = i;
-                        break;
-                    }
-                }
-            }
-            
-            if (indexToUpdate === -1) {
-                for (let i = 0; i < tableData.length; i++) {
-                    const row = tableData[i];
-                    if (row.name === product.name && row.expiry === oldExpiry) {
-                        indexToUpdate = i;
-                        break;
-                    }
-                }
-            }
-            
-            if (indexToUpdate === -1) {
-                console.log('⚠️ Товар не найден в таблице для обновления');
-                return false;
-            }
-            
-            const updateData = {
-                name: product.name,
-                barcode: product.barcode || '',
-                weight: product.weight || '',
-                department: product.department || '',
-                expiry: product.expiry
-            };
-            
-            const updateResponse = await fetch(`${SHEET_URL}${sheetId}/${indexToUpdate}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updateData)
-            });
-            
-            if (!updateResponse.ok) {
-                throw new Error(`Ошибка обновления: ${updateResponse.status}`);
-            }
-            
-            console.log('✅ Товар обновлён в таблице, индекс:', indexToUpdate);
-            return true;
-        } catch (error) {
-            console.error('Ошибка обновления товара:', error);
-            return false;
-        }
-    }
-
-    // ===================== ШАБЛОНЫ =====================
-    function loadTemplates() {
-        const saved = localStorage.getItem('templates_data');
-        if (saved) {
-            try { templates = JSON.parse(saved); } catch(e) { templates = []; }
-        } else {
-            templates = [
-                { name: 'Кетчуп Махеев Болгарский', barcode: '4604258008505', weight: '350г', department: 'Соусы' },
-                { name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка' },
-                { name: 'Соль поваренная', barcode: '4601234567892', weight: '', department: 'Специи' },
-                { name: 'Масло подсолнечное 1л', barcode: '4601234567893', weight: '1л', department: 'Масла' },
-                { name: 'Консервы горошек', barcode: '4601234567894', weight: '400г', department: 'Консервы' },
-                { name: 'Пельмени 0,5кг', barcode: '4601234567895', weight: '0.5кг', department: 'Заморозка' }
-            ];
-            saveTemplates();
-        }
-    }
-
-    function saveTemplates() {
-        localStorage.setItem('templates_data', JSON.stringify(templates));
-    }
-
-    function renderTemplateList() {
-        const container = document.getElementById('templateItemsList');
-        const deptFilter = document.getElementById('templateFilterDept').value;
-        let filtered = templates;
-        if (deptFilter !== 'all') {
-            filtered = filtered.filter(t => t.department === deptFilter);
-        }
-        if (filtered.length === 0) {
-            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">Нет шаблонов${deptFilter !== 'all' ? ` в отделе "${deptFilter}"` : ''}</div>`;
-            return;
-        }
-        let html = '';
-        filtered.forEach((t, idx) => {
-            const deptDisplay = t.department || 'Без отдела';
-            html += `
-                <div class="template-item">
-                    <input type="checkbox" data-idx="${idx}" data-dept="${t.department || ''}">
-                    <span class="info">${escapeHtml(t.name)} ${t.barcode ? `🔢${escapeHtml(t.barcode)}` : ''} ${t.weight ? `⚖️${escapeHtml(t.weight)}` : ''}</span>
-                    <span class="dept">🏪 ${escapeHtml(deptDisplay)}</span>
-                    <button class="template-del" onclick="deleteTemplate(${idx})" title="Удалить шаблон">✕</button>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-    }
-
-    function deleteTemplate(idx) {
-        if (confirm(`Удалить шаблон "${templates[idx].name}"?`)) {
-            templates.splice(idx, 1);
-            saveTemplates();
-            renderTemplateList();
-            showToast('🗑️ Шаблон удалён');
-        }
-    }
-
-    function addTemplateItem() {
-        const name = document.getElementById('templateAddName').value.trim();
-        const barcode = document.getElementById('templateAddBarcode').value.trim();
-        const weight = document.getElementById('templateAddWeight').value.trim();
-        const department = document.getElementById('templateAddDepartment').value;
-
-        if (!name) { showToast('❌ Введите название'); return; }
-        if (!department) { showToast('❌ Выберите отдел'); return; }
-
-        const exists = templates.some(t => t.name.toLowerCase() === name.toLowerCase() && t.barcode === barcode);
-        if (exists) { showToast('⚠️ Такой шаблон уже существует'); return; }
-
-        templates.push({ name, barcode, weight, department });
-        saveTemplates();
-        renderTemplateList();
-        document.getElementById('templateAddName').value = '';
-        document.getElementById('templateAddBarcode').value = '';
-        document.getElementById('templateAddWeight').value = '';
-        showToast('✅ Шаблон добавлен');
-    }
-
-    function addTemplateProducts() {
-        const expiry = document.getElementById('templateExpiry').value.trim();
-        if (!expiry) { showToast('❌ Введите срок годности'); return; }
-        const parsed = parseDateDMY(expiry);
-        if (!parsed) { showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ'); return; }
-
-        const checked = document.querySelectorAll('#templateItemsList input[type="checkbox"]:checked');
-        if (checked.length === 0) { showToast('❌ Выберите хотя бы один шаблон'); return; }
-
-        let added = 0;
-        checked.forEach(cb => {
-            const idx = parseInt(cb.dataset.idx);
-            const t = templates[idx];
-            if (t) {
-                const newProduct = {
-                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                    name: t.name,
-                    barcode: t.barcode || '',
-                    weight: t.weight || '',
-                    department: t.department || '',
-                    expiry: parsed.raw
-                };
-                if (newProduct.barcode) {
-                    const exists = products.some(p => p.barcode === newProduct.barcode && p.expiry === newProduct.expiry);
-                    if (exists) return;
-                }
-                const existsByName = products.some(p => p.name === newProduct.name && p.expiry === newProduct.expiry);
-                if (existsByName) return;
-                
-                products.push(newProduct);
-                added++;
-            }
-        });
-
-        if (added === 0) { showToast('⚠️ Товары уже существуют'); return; }
-        saveToLocal();
-        render();
-        closeTemplateModal();
-        showToast(`✅ Добавлено ${added} товаров по шаблону`, 'success');
-        syncWithGoogle();
-    }
-
-    function openTemplateModal() {
-        document.getElementById('templateModal').classList.add('active');
-        document.getElementById('templateExpiry').value = '';
-        document.getElementById('templateFilterDept').value = 'all';
-        loadTemplates();
-        renderTemplateList();
-    }
-
-    function closeTemplateModal() {
-        document.getElementById('templateModal').classList.remove('active');
-    }
-
-    // ===================== PDF ОТЧЁТ =====================
-    function generatePDF() {
-        if (products.length === 0) {
-            showToast('📭 Нет данных для отчёта');
-            return;
-        }
-
-        showToast('📄 Генерация PDF...');
-
-        let total = products.length;
-        let expired = 0, week = 0, expiring = 0, ok = 0;
-        let deptStats = {};
-        products.forEach(p => {
-            const days = getDaysLeftFromDate(p.expiry);
-            if (days < 0) expired++;
-            else if (days >= 2 && days <= 7) week++;
-            else if (days >= 0 && days <= 1) expiring++;
-            else ok++;
-            if (p.department) {
-                if (!deptStats[p.department]) deptStats[p.department] = 0;
-                deptStats[p.department]++;
-            }
-        });
-
-        let tableRows = '';
-        products.forEach(p => {
-            const days = getDaysLeftFromDate(p.expiry);
-            const status = getStatus(days);
-            const barcode = p.barcode || '—';
-            const dept = p.department || '—';
-            const expiry = formatDateForList(p.expiry);
-            tableRows += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(barcode)}</td><td>${escapeHtml(dept)}</td><td>${escapeHtml(expiry)}</td><td class="${status.class}">${status.status}</td></tr>`;
-        });
-
-        let deptRows = '';
-        for (let [dept, count] of Object.entries(deptStats).sort((a,b) => b[1] - a[1])) {
-            deptRows += `<tr><td>${escapeHtml(dept)}</td><td>${count}</td></tr>`;
-        }
-
-        const pdfHtml = `
-            <h1>📦 Отчёт по товарам</h1>
-            <div class="pdf-date">Дата: ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU')}</div>
-            <div class="pdf-summary">
-                <div class="pdf-summary-item"><span class="num">${total}</span><br>Всего</div>
-                <div class="pdf-summary-item"><span class="num red">${expired}</span><br>Просрочено</div>
-                <div class="pdf-summary-item"><span class="num orange">${week}</span><br>2-7 дней</div>
-                <div class="pdf-summary-item"><span class="num yellow">${expiring}</span><br>0-1 день</div>
-                <div class="pdf-summary-item"><span class="num green">${ok}</span><br>В порядке</div>
-            </div>
-            <h3>📊 По отделам</h3>
-            <table>
-                <tr><th>Отдел</th><th>Количество</th></tr>
-                ${deptRows}
-            </table>
-            <h3 style="margin-top:20px;">📋 Все товары</h3>
-            <table>
-                <tr><th>Название</th><th>Штрих-код</th><th>Отдел</th><th>Срок годности</th><th>Статус</th></tr>
-                ${tableRows}
-            </table>
-            <div class="pdf-footer">Отчёт сгенерирован ${new Date().toLocaleString('ru-RU')}</div>
-        `;
-
-        const container = document.getElementById('pdfContainer');
-        container.innerHTML = pdfHtml;
-
-        const opt = {
-            margin: [10, 10, 10, 10],
-            filename: `отчёт_товары_${getDateStr(0)}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        html2pdf().set(opt).from(container).save().then(() => {
-            showToast('📄 PDF отчёт создан');
-            container.innerHTML = '';
-        }).catch(err => {
-            console.error('Ошибка PDF:', err);
-            showToast('⚠️ Ошибка создания PDF');
-            container.innerHTML = '';
-        });
-    }
-
-    // ===================== СТАТИСТИКА =====================
-    function openStatsModal() {
-        if (products.length === 0) {
-            showToast('📭 Нет данных для статистики');
-            return;
-        }
-        let total = products.length;
-        let expired = 0, week = 0, expiring = 0, ok = 0;
-        let depts = new Set();
-        let deptStats = {};
-        let totalDays = 0;
-        let withBarcode = 0;
-        let noDept = 0;
-
-        products.forEach(p => {
-            const days = getDaysLeftFromDate(p.expiry);
-            if (days < 0) expired++;
-            else if (days >= 2 && days <= 7) week++;
-            else if (days >= 0 && days <= 1) expiring++;
-            else ok++;
-            totalDays += Math.max(0, days);
-            if (p.department) {
-                depts.add(p.department);
-                if (!deptStats[p.department]) deptStats[p.department] = { total: 0, expired: 0, week: 0, expiring: 0, ok: 0 };
-                if (days < 0) deptStats[p.department].expired++;
-                else if (days >= 2 && days <= 7) deptStats[p.department].week++;
-                else if (days >= 0 && days <= 1) deptStats[p.department].expiring++;
-                else deptStats[p.department].ok++;
-                deptStats[p.department].total++;
-            } else {
-                noDept++;
-            }
-            if (p.barcode) withBarcode++;
-        });
-
-        const avgDays = total > 0 ? Math.round(totalDays / total) : 0;
-
-        document.getElementById('statsTotal').textContent = total;
-        document.getElementById('statsDepartments').textContent = depts.size;
-        document.getElementById('statsAvgExpiry').textContent = avgDays;
-        document.getElementById('statsExpired').textContent = expired;
-        document.getElementById('statsWeek').textContent = week;
-        document.getElementById('statsExpiring').textContent = expiring;
-        document.getElementById('statsOk').textContent = ok;
-        document.getElementById('statsNoDept').textContent = noDept;
-        document.getElementById('statsWithBarcode').textContent = withBarcode;
-
-        let deptHtml = '';
-        for (let [dept, stats] of Object.entries(deptStats).sort((a,b) => b[1].total - a[1].total)) {
-            const statusParts = [];
-            if (stats.expired > 0) statusParts.push(`<span class="status-badge red">${stats.expired} просроч.</span>`);
-            if (stats.expiring > 0) statusParts.push(`<span class="status-badge yellow">${stats.expiring} 0-1д</span>`);
-            if (stats.week > 0) statusParts.push(`<span class="status-badge orange">${stats.week} 2-7д</span>`);
-            if (stats.ok > 0) statusParts.push(`<span class="status-badge green">${stats.ok} ок</span>`);
-            deptHtml += `
-                <div class="stats-dept-row">
-                    <span>🏪 ${escapeHtml(dept)}</span>
-                    <span class="count">${stats.total}</span>
-                </div>
-                <div style="display:flex; gap:4px; flex-wrap:wrap; padding-bottom:4px; border-bottom:1px solid #f5f5f5; margin-bottom:2px;">
-                    ${statusParts.join(' ')}
-                </div>
-            `;
-        }
-        document.getElementById('statsDepartmentsList').innerHTML = deptHtml;
-        document.getElementById('statsModal').classList.add('active');
-    }
-
-    function closeStatsModal() {
-        document.getElementById('statsModal').classList.remove('active');
-    }
-
-    // ===================== КАЛЬКУЛЯТОР =====================
-    function toggleCalculator() {
-        const calculator = document.getElementById('calculator');
-        calculator.classList.toggle('active');
-        if (calculator.classList.contains('active')) {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('manufactureDate').value = today;
-            document.getElementById('calculatorResult').style.display = 'none';
-        }
-    }
-
-    function calculateExpiry() {
-        const manufactureDate = document.getElementById('manufactureDate').value;
-        const shelfLife = parseInt(document.getElementById('shelfLife').value);
-        const unit = document.getElementById('shelfLifeUnit').value;
-
-        if (!manufactureDate) {
-            showToast('❌ Выберите дату изготовления');
-            return;
-        }
-        if (!shelfLife || shelfLife < 1) {
-            showToast('❌ Введите срок годности');
-            return;
-        }
-
-        const date = new Date(manufactureDate);
-        
-        if (unit === 'days') {
-            date.setDate(date.getDate() + shelfLife);
-        } else if (unit === 'months') {
-            date.setMonth(date.getMonth() + shelfLife);
-        } else if (unit === 'years') {
-            date.setFullYear(date.getFullYear() + shelfLife);
-        }
-
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        const expiryDateStr = `${day}.${month}.${year}`;
-        calculatedExpiry = expiryDateStr;
-
-        document.getElementById('expiryDate').textContent = expiryDateStr;
-        document.getElementById('calculatorResult').style.display = 'block';
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const expiryDate = new Date(year, date.getMonth(), date.getDate());
-        const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-
-        const daysElement = document.getElementById('daysLeft');
-        const statusInfo = document.getElementById('statusInfo');
-
-        if (daysLeft < 0) {
-            daysElement.textContent = `⚠️ Просрочен на ${Math.abs(daysLeft)} дней`;
-            daysElement.className = 'days red';
-            statusInfo.textContent = '🔴 Товар просрочен!';
-        } else if (daysLeft === 0) {
-            daysElement.textContent = '⚠️ Истекает СЕГОДНЯ!';
-            daysElement.className = 'days red';
-            statusInfo.textContent = '🟡 Срочно использовать!';
-        } else if (daysLeft <= 3) {
-            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days orange';
-            statusInfo.textContent = '🟠 Скоро истекает';
-        } else if (daysLeft <= 7) {
-            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days orange';
-            statusInfo.textContent = '🟡 Использовать в ближайшее время';
-        } else if (daysLeft <= 30) {
-            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days green';
-            statusInfo.textContent = '🟢 Срок нормальный';
-        } else {
-            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days green';
-            statusInfo.textContent = '🟢 Срок достаточный';
-        }
-
-        showToast(`✅ Рассчитано: годен до ${expiryDateStr}`);
-    }
-
-    function addCalculatedProduct() {
-        if (!calculatedExpiry) {
-            showToast('❌ Сначала рассчитайте срок');
-            return;
-        }
-        openAddModal();
-        document.getElementById('productExpiry').value = calculatedExpiry;
-        document.getElementById('productExpiry').style.borderColor = '#27ae60';
-        document.getElementById('productExpiry').style.background = '#f0fff0';
-        showToast(`📅 Срок годности: ${calculatedExpiry}`);
-        document.getElementById('calculator').classList.remove('active');
-    }
-
-    // ===================== ПОИСК ПО НАЗВАНИЮ =====================
-    function onSearchInput() {
-        searchQuery = document.getElementById('productSearchInput').value.trim();
-        render();
-    }
-
-    function clearSearch() {
-        document.getElementById('productSearchInput').value = '';
-        searchQuery = '';
-        render();
-        showToast('🔍 Поиск очищен');
     }
 
     // ===================== ОСНОВНЫЕ ФУНКЦИИ =====================
@@ -1765,419 +1083,67 @@
         return `${daysLeft} дн.`;
     }
 
-    // ===================== ID ТАБЛИЦЫ =====================
-    function getSheetId() {
-        return localStorage.getItem('google_sheet_id') || YOUR_SHEET_ID;
-    }
-
-    // ===================== УДАЛЕНИЕ ИЗ ТАБЛИЦЫ =====================
-    async function deleteFromGoogle(product) {
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            showToast('❌ ID не настроен');
-            return false;
-        }
-
-        try {
-            const response = await fetch(`${SHEET_URL}${sheetId}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const tableData = await response.json();
-            
-            let indexToDelete = -1;
-            for (let i = 0; i < tableData.length; i++) {
-                const row = tableData[i];
-                if (row.barcode === product.barcode && 
-                    row.expiry === product.expiry &&
-                    row.name === product.name) {
-                    indexToDelete = i;
-                    break;
-                }
-            }
-            
-            if (indexToDelete === -1) {
-                console.log('Товар не найден в таблице');
-                return false;
-            }
-            
-            const deleteResponse = await fetch(`${SHEET_URL}${sheetId}/${indexToDelete}`, {
-                method: 'DELETE'
-            });
-            
-            if (!deleteResponse.ok) {
-                throw new Error(`Ошибка удаления: ${deleteResponse.status}`);
-            }
-            
-            console.log('✅ Товар удалён из таблицы, индекс:', indexToDelete);
-            return true;
-        } catch (error) {
-            console.error('Ошибка удаления из таблицы:', error);
-            showToast('⚠️ Ошибка удаления из таблицы: ' + error.message);
-            return false;
-        }
-    }
-
-    // ===================== ОБНОВЛЕНИЕ ОТДЕЛА В ТАБЛИЦЕ =====================
-    async function updateDepartmentInGoogle(productData) {
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            showToast('❌ ID не настроен');
-            return false;
-        }
-
-        try {
-            const response = await fetch(`${SHEET_URL}${sheetId}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const tableData = await response.json();
-            
-            let indexToUpdate = -1;
-            for (let i = 0; i < tableData.length; i++) {
-                const row = tableData[i];
-                if (row.barcode === productData.barcode && 
-                    row.expiry === productData.expiry &&
-                    row.name === productData.name) {
-                    indexToUpdate = i;
-                    break;
-                }
-            }
-            
-            if (indexToUpdate === -1) {
-                console.log('⚠️ Товар не найден в таблице для обновления отдела');
-                return false;
-            }
-            
-            const updateData = {
-                name: productData.name,
-                barcode: productData.barcode,
-                weight: tableData[indexToUpdate].weight || '',
-                department: productData.department || '',
-                expiry: productData.expiry
-            };
-            
-            const updateResponse = await fetch(`${SHEET_URL}${sheetId}/${indexToUpdate}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updateData)
-            });
-            
-            if (!updateResponse.ok) {
-                throw new Error(`Ошибка обновления: ${updateResponse.status}`);
-            }
-            
-            console.log('✅ Отдел обновлён в таблице, индекс:', indexToUpdate);
-            return true;
-        } catch (error) {
-            console.error('Ошибка обновления отдела:', error);
-            return false;
-        }
-    }
-
-    // ===================== УДАЛЕНИЕ ТОВАРА =====================
-    async function confirmDelete() {
-        if (!deleteTargetId) {
-            closeDeleteModal();
-            return;
-        }
-        
-        const index = products.findIndex(p => p.id === deleteTargetId);
-        if (index === -1) {
-            closeDeleteModal();
-            return;
-        }
-        
-        const product = products[index];
-        console.log('🗑️ Удаляем товар:', product.name);
-        
-        const productData = {
-            name: product.name,
-            barcode: product.barcode,
-            expiry: product.expiry,
-            department: product.department
-        };
-        
-        products.splice(index, 1);
-        saveToLocal();
-        render();
-        showToast('🗑️ Товар удалён с сайта');
-        
-        try {
-            await deleteFromGoogle(productData);
-            showToast('✅ Товар удалён из таблицы');
-        } catch (error) {
-            console.error('Ошибка удаления из таблицы:', error);
-            showToast('⚠️ Ошибка удаления из таблицы');
-        }
-        
-        closeDeleteModal();
-    }
-
-    // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА (ОДИН ТОВАР) =====================
-    async function removeFromDepartment(productId) {
-        const product = products.find(p => p.id === productId);
-        if (!product || !product.department) {
-            showToast('ℹ️ Товар не привязан к отделу');
-            return;
-        }
-        
-        const deptName = product.department;
-        
-        const productData = {
-            name: product.name,
-            barcode: product.barcode,
-            expiry: product.expiry,
-            department: ''
-        };
-        
-        product.department = '';
-        saveToLocal();
-        render();
-        showToast(`✅ Товар удалён из отдела "${deptName}"`);
-        
-        try {
-            const updated = await updateDepartmentInGoogle(productData);
-            if (updated) {
-                showToast('✅ Отдел обновлён в таблице');
-            } else {
-                showToast('⚠️ Ошибка обновления в таблице');
-            }
-        } catch (error) {
-            console.error('Ошибка обновления:', error);
-            showToast('⚠️ Ошибка обновления в таблице');
-        }
-    }
-
-    // ===================== СИНХРОНИЗАЦИЯ =====================
+    // ===================== РАБОТА С GOOGLE =====================
     function updateSyncStatus(color, text) {
         document.getElementById('syncDot').className = 'dot ' + color;
         document.getElementById('syncText').textContent = text;
     }
 
-    function getProductKey(product) {
-        const name = (product.name || '').trim().toLowerCase();
-        const barcode = (product.barcode || '').trim();
-        const expiry = (product.expiry || '').trim();
-        const department = (product.department || '').trim();
-        if (barcode) {
-            return `barcode_${barcode}_${expiry}_${department}`;
-        }
-        return `name_${name}_${expiry}_${department}`;
-    }
-
-    function isEmptyRow(row) {
-        return !row.name && !row.barcode && !row.weight && !row.department && !row.expiry;
-    }
-
-    async function findFirstEmptyRow(sheetId) {
-        try {
-            const response = await fetch(`${SHEET_URL}${sheetId}`);
-            if (!response.ok) return -1;
-            const tableData = await response.json();
-            
-            for (let i = 0; i < tableData.length; i++) {
-                if (isEmptyRow(tableData[i])) {
-                    return i;
-                }
-            }
-            return -1;
-        } catch (error) {
-            console.error('Ошибка поиска пустой строки:', error);
-            return -1;
-        }
-    }
-
-    async function saveToGoogleWithEmptyCheck() {
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            showToast('❌ ID не настроен');
-            return false;
-        }
-
-        try {
-            updateSyncStatus('yellow', 'Сохранение...');
-            
-            const response = await fetch(`${SHEET_URL}${sheetId}`);
-            let tableData = [];
-            if (response.ok) {
-                tableData = await response.json();
-            }
-            
-            const tableMap = new Map();
-            tableData.forEach((row, index) => {
-                const key = getProductKey(row);
-                if (!isEmptyRow(row)) {
-                    tableMap.set(key, { row, index });
-                }
-            });
-            
-            const newProducts = [];
-            products.forEach(p => {
-                const key = getProductKey(p);
-                if (!tableMap.has(key)) {
-                    newProducts.push({
-                        name: p.name || '',
-                        barcode: p.barcode || '',
-                        weight: p.weight || '',
-                        department: p.department || '',
-                        expiry: p.expiry || ''
-                    });
-                }
-            });
-            
-            if (newProducts.length === 0) {
-                showToast('ℹ️ Все товары уже есть в таблице');
-                updateSyncStatus('green', 'Всё синхронизировано');
-                return true;
-            }
-            
-            let emptyIndex = await findFirstEmptyRow(sheetId);
-            let addedCount = 0;
-            let usedEmptyRow = false;
-            
-            for (const product of newProducts) {
-                if (emptyIndex !== -1 && !usedEmptyRow) {
-                    const updateResponse = await fetch(`${SHEET_URL}${sheetId}/${emptyIndex}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(product)
-                    });
-                    
-                    if (updateResponse.ok) {
-                        addedCount++;
-                        usedEmptyRow = true;
-                        showToast(`✅ Заполнена пустая строка #${emptyIndex + 1}`);
-                        continue;
-                    }
-                }
-                
-                const postResponse = await fetch(`${SHEET_URL}${sheetId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(product)
-                });
-                
-                if (postResponse.ok) {
-                    addedCount++;
-                }
-            }
-
-            updateSyncStatus('green', `Добавлено ${addedCount} товаров`);
-            showToast(`✅ Добавлено ${addedCount} товаров (${usedEmptyRow ? 'в пустую строку' : 'в конец'})`);
-            return true;
-        } catch (error) {
-            console.error('Ошибка сохранения:', error);
-            updateSyncStatus('red', 'Ошибка сохранения');
-            showToast('⚠️ Ошибка: ' + error.message);
-            return false;
-        }
-    }
-
-    async function rebuildTable() {
-        if (products.length === 0) {
-            showToast('📭 Нет товаров для перестройки');
-            return;
-        }
-        
-        if (!confirm('Это удалит ВСЕ данные из таблицы и запишет их заново.\nПродолжить?')) {
-            return;
-        }
-        
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            showToast('❌ ID не настроен');
-            return;
-        }
-        
-        try {
-            showToast('🔄 Перестройка таблицы...');
-            
-            await fetch(`${SHEET_URL}${sheetId}`, { method: 'DELETE' });
-            
-            const dataToSend = products.map(p => ({
-                name: p.name || '',
-                barcode: p.barcode || '',
-                weight: p.weight || '',
-                department: p.department || '',
-                expiry: p.expiry || ''
-            }));
-            
-            const batchSize = 50;
-            for (let i = 0; i < dataToSend.length; i += batchSize) {
-                const batch = dataToSend.slice(i, i + batchSize);
-                await fetch(`${SHEET_URL}${sheetId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(batch)
-                });
-            }
-            
-            showToast(`✅ Таблица перестроена (${products.length} товаров)`);
-            await loadFromGoogle();
-        } catch (error) {
-            console.error('Ошибка перестройки:', error);
-            showToast('⚠️ Ошибка перестройки таблицы');
-        }
-    }
-
-    // ===================== ЗАГРУЗКА ИЗ GOOGLE =====================
+    // Загрузка данных из Google
     async function loadFromGoogle() {
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            updateSyncStatus('red', 'Не настроена');
+        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
+            updateSyncStatus('red', 'Нет API-ключа');
+            loadFromLocal();
             return;
         }
 
         try {
             updateSyncStatus('yellow', 'Загрузка...');
-            const response = await fetch(`${SHEET_URL}${sheetId}`);
+            const response = await fetch(SHEET_URL);
             
-            if (response.status === 404) {
-                updateSyncStatus('red', 'Таблица не найдена');
+            if (!response.ok) {
+                if (response.status === 404) {
+                    updateSyncStatus('red', 'Таблица не найдена');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 loadFromLocal();
                 return;
             }
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data = await response.json();
             
-            if (data && Array.isArray(data) && data.length > 0) {
-                const existingMap = new Map();
-                products.forEach(p => {
-                    const key = getProductKey(p);
-                    existingMap.set(key, p);
-                });
+            if (data && data.values && data.values.length > 0) {
+                const rows = data.values.slice(1);
+                const localProducts = [];
 
-                let addedCount = 0;
-                data.forEach(row => {
-                    if (isEmptyRow(row)) return;
-                    
-                    const newProduct = {
-                        id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                        name: row.name || 'Без названия',
-                        barcode: row.barcode || '',
-                        weight: row.weight || '',
-                        department: row.department || '',
-                        expiry: normalizeDate(row.expiry || getDateStr(7))
-                    };
-                    
-                    const key = getProductKey(newProduct);
-                    if (!existingMap.has(key) && newProduct.name && newProduct.name !== 'Без названия') {
-                        products.push(newProduct);
-                        existingMap.set(key, newProduct);
-                        addedCount++;
+                rows.forEach(row => {
+                    if (row.length >= 5 && row[0] && row[0].trim()) {
+                        localProducts.push({
+                            id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                            name: row[0] || 'Без названия',
+                            barcode: row[1] || '',
+                            weight: row[2] || '',
+                            department: row[3] || '',
+                            expiry: normalizeDate(row[4] || getDateStr(7))
+                        });
                     }
                 });
 
-                if (addedCount > 0) {
+                if (localProducts.length > 0) {
+                    products = localProducts;
                     saveToLocal();
-                    showToast(`✅ Добавлено ${addedCount} товаров из таблицы на сайт`);
+                    showToast(`✅ Загружено ${products.length} товаров из таблицы`);
+                } else {
+                    showToast('📭 Таблица пуста');
+                    loadFromLocal();
                 }
                 
                 render();
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
             } else {
                 updateSyncStatus('green', 'Таблица пуста');
+                loadFromLocal();
                 render();
             }
         } catch (error) {
@@ -2188,27 +1154,111 @@
         }
     }
 
-    async function syncWithGoogle() {
-        if (isSyncing) return;
-        isSyncing = true;
-        
-        const sheetId = getSheetId();
-        if (!sheetId) {
-            showToast('❌ Настройте ID');
-            isSyncing = false;
-            return;
+    // Добавление товара в Google
+    async function addToGoogle(product) {
+        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
+            return false;
         }
 
         try {
-            await loadFromGoogle();
-            await saveToGoogleWithEmptyCheck();
-            await loadFromGoogle();
-            showToast('✅ Синхронизация завершена!');
+            const values = [[
+                product.name || '',
+                product.barcode || '',
+                product.weight || '',
+                product.department || '',
+                product.expiry || ''
+            ]];
+
+            const response = await fetch(SHEET_UPDATE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ values: values })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            console.log('✅ Товар добавлен в таблицу');
+            return true;
         } catch (error) {
-            console.error('Ошибка:', error);
-            showToast('⚠️ Ошибка синхронизации');
+            console.error('Ошибка добавления в таблицу:', error);
+            return false;
         }
-        isSyncing = false;
+    }
+
+    // Удаление товара из Google (перезаписываем всю таблицу)
+    async function deleteFromGoogle(product) {
+        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
+            return false;
+        }
+
+        try {
+            const response = await fetch(SHEET_URL);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            
+            if (!data.values || data.values.length === 0) {
+                return false;
+            }
+
+            const header = data.values[0] || ['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности'];
+            const rows = data.values.slice(1);
+            
+            const newRows = rows.filter(row => {
+                if (row.length < 5) return true;
+                return !(row[1] === product.barcode && row[4] === product.expiry && row[0] === product.name);
+            });
+
+            await fetch(SHEET_CLEAR_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (newRows.length > 0) {
+                const allData = [header, ...newRows];
+                await fetch(SHEET_UPDATE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ values: allData })
+                });
+            }
+
+            console.log('✅ Товар удалён из таблицы');
+            return true;
+        } catch (error) {
+            console.error('Ошибка удаления из таблицы:', error);
+            return false;
+        }
+    }
+
+    // Очистка всей таблицы
+    async function clearGoogleSheet() {
+        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
+            return false;
+        }
+
+        try {
+            await fetch(SHEET_CLEAR_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            console.log('✅ Таблица очищена');
+            
+            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
+            await fetch(SHEET_UPDATE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ values: header })
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('Ошибка очистки таблицы:', error);
+            return false;
+        }
     }
 
     // ===================== ЛОКАЛЬНОЕ ХРАНИЛИЩЕ =====================
@@ -2231,7 +1281,203 @@
         localStorage.setItem('products_tracker_local', JSON.stringify(products));
     }
 
-    // ===================== ФИЛЬТРЫ =====================
+    // ===================== УМНЫЕ НАПОМИНАНИЯ =====================
+    function checkReminders() {
+        let expired = 0;
+        let expiring = 0;
+        let reminders = [];
+
+        products.forEach(p => {
+            const days = getDaysLeftFromDate(p.expiry);
+            if (days < 0) {
+                expired++;
+                reminders.push({ product: p, days: days, type: 'danger', text: `Просрочен на ${Math.abs(days)} дней` });
+            } else if (days === 0 || days === 1) {
+                expiring++;
+                reminders.push({ product: p, days: days, type: 'warning', text: `Истекает ${days === 0 ? 'СЕГОДНЯ!' : 'ЗАВТРА!'}` });
+            }
+        });
+
+        const badge = document.getElementById('expiredBadge');
+        if (expired > 0) {
+            badge.textContent = expired;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+
+        const notifyBadge = document.getElementById('notifyBadge');
+        const total = expired + expiring;
+        if (total > 0) {
+            notifyBadge.textContent = total;
+            notifyBadge.style.display = 'inline-block';
+        } else {
+            notifyBadge.style.display = 'none';
+        }
+
+        return reminders;
+    }
+
+    function showReminders() {
+        const reminders = checkReminders();
+        const container = document.getElementById('remindersList');
+
+        if (reminders.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center;padding:30px;">
+                    <div style="font-size:48px;">🎉</div>
+                    <p style="color:#888;margin-top:10px;">Все товары в порядке!<br>Нет критических сроков.</p>
+                </div>
+            `;
+        } else {
+            let html = '';
+            reminders.forEach(r => {
+                const cls = r.type === 'danger' ? 'danger' : 'warning';
+                const daysCls = r.days < 0 ? 'red' : 'orange';
+                const daysText = r.days < 0 ? `${Math.abs(r.days)} дн.` : `${r.days} дн.`;
+                html += `
+                    <div class="reminder-item ${cls}">
+                        <div class="icon">${r.type === 'danger' ? '🚨' : '⚠️'}</div>
+                        <div class="text">
+                            <div class="title">${escapeHtml(r.product.name)}</div>
+                            <div class="sub">📅 ${formatDateForList(r.product.expiry)} ${r.product.department ? '🏪 ' + escapeHtml(r.product.department) : ''}</div>
+                            <div class="sub">${r.text}</div>
+                        </div>
+                        <div class="days ${daysCls}">${daysText}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        document.getElementById('remindersModal').classList.add('active');
+    }
+
+    function closeRemindersModal() {
+        document.getElementById('remindersModal').classList.remove('active');
+    }
+
+    function showExpiryWarning(product) {
+        const days = getDaysLeftFromDate(product.expiry);
+        if (days < 0) {
+            showToast(`🚨 Товар "${product.name}" ПРОСРОЧЕН!`, 'danger');
+        } else if (days === 0) {
+            showToast(`⚠️ Товар "${product.name}" истекает СЕГОДНЯ!`, 'warning');
+        } else if (days === 1) {
+            showToast(`⚠️ Товар "${product.name}" истекает ЗАВТРА!`, 'warning');
+        } else if (days <= 3) {
+            showToast(`⏳ Товар "${product.name}" истекает через ${days} дня`, 'warning');
+        }
+    }
+
+    // ===================== КАЛЬКУЛЯТОР =====================
+    function toggleCalculator() {
+        const calculator = document.getElementById('calculator');
+        calculator.classList.toggle('active');
+        if (calculator.classList.contains('active')) {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('manufactureDate').value = today;
+            document.getElementById('calculatorResult').style.display = 'none';
+        }
+    }
+
+    function calculateExpiry() {
+        const manufactureDate = document.getElementById('manufactureDate').value;
+        const shelfLife = parseInt(document.getElementById('shelfLife').value);
+        const unit = document.getElementById('shelfLifeUnit').value;
+
+        if (!manufactureDate) {
+            showToast('❌ Выберите дату изготовления');
+            return;
+        }
+        if (!shelfLife || shelfLife < 1) {
+            showToast('❌ Введите срок годности');
+            return;
+        }
+
+        const date = new Date(manufactureDate);
+        
+        if (unit === 'days') {
+            date.setDate(date.getDate() + shelfLife);
+        } else if (unit === 'months') {
+            date.setMonth(date.getMonth() + shelfLife);
+        } else if (unit === 'years') {
+            date.setFullYear(date.getFullYear() + shelfLife);
+        }
+
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const expiryDateStr = `${day}.${month}.${year}`;
+        calculatedExpiry = expiryDateStr;
+
+        document.getElementById('expiryDate').textContent = expiryDateStr;
+        document.getElementById('calculatorResult').style.display = 'block';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiryDate = new Date(year, date.getMonth(), date.getDate());
+        const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+        const daysElement = document.getElementById('daysLeft');
+        const statusInfo = document.getElementById('statusInfo');
+
+        if (daysLeft < 0) {
+            daysElement.textContent = `⚠️ Просрочен на ${Math.abs(daysLeft)} дней`;
+            daysElement.className = 'days red';
+            statusInfo.textContent = '🔴 Товар просрочен!';
+        } else if (daysLeft === 0) {
+            daysElement.textContent = '⚠️ Истекает СЕГОДНЯ!';
+            daysElement.className = 'days red';
+            statusInfo.textContent = '🟡 Срочно использовать!';
+        } else if (daysLeft <= 3) {
+            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days orange';
+            statusInfo.textContent = '🟠 Скоро истекает';
+        } else if (daysLeft <= 7) {
+            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days orange';
+            statusInfo.textContent = '🟡 Использовать в ближайшее время';
+        } else if (daysLeft <= 30) {
+            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days green';
+            statusInfo.textContent = '🟢 Срок нормальный';
+        } else {
+            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days green';
+            statusInfo.textContent = '🟢 Срок достаточный';
+        }
+
+        showToast(`✅ Рассчитано: годен до ${expiryDateStr}`);
+    }
+
+    function addCalculatedProduct() {
+        if (!calculatedExpiry) {
+            showToast('❌ Сначала рассчитайте срок');
+            return;
+        }
+        openAddModal();
+        document.getElementById('productExpiry').value = calculatedExpiry;
+        document.getElementById('productExpiry').style.borderColor = '#27ae60';
+        document.getElementById('productExpiry').style.background = '#f0fff0';
+        showToast(`📅 Срок годности: ${calculatedExpiry}`);
+        document.getElementById('calculator').classList.remove('active');
+    }
+
+    // ===================== ПОИСК =====================
+    function onSearchInput() {
+        searchQuery = document.getElementById('productSearchInput').value.trim();
+        render();
+    }
+
+    function clearSearch() {
+        document.getElementById('productSearchInput').value = '';
+        searchQuery = '';
+        render();
+        showToast('🔍 Поиск очищен');
+    }
+
+    // ===================== ФИЛЬТРЫ И СОРТИРОВКА =====================
     function filterDepartment(department) {
         currentDepartment = department;
         document.querySelectorAll('.dept-btn').forEach(btn => {
@@ -2267,7 +1513,6 @@
 
         let filtered = [...products];
         
-        // Поиск по названию
         if (searchQuery) {
             filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
         }
@@ -2393,7 +1638,386 @@
         list.innerHTML = html;
     }
 
-    // ===================== МАССОВОЕ УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
+    // ===================== РЕДАКТОР ПО ОТДЕЛАМ =====================
+    function openEditByDepartmentModal() {
+        document.getElementById('editByDepartmentModal').classList.add('active');
+        document.getElementById('editSearchInput').value = '';
+        document.getElementById('editDepartmentSelect').value = '';
+        document.getElementById('editProductsList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Введите название для поиска</div>';
+        renderEditProducts();
+    }
+
+    function closeEditByDepartmentModal() {
+        document.getElementById('editByDepartmentModal').classList.remove('active');
+    }
+
+    function renderEditProducts() {
+        const container = document.getElementById('editProductsList');
+        const searchQuery = document.getElementById('editSearchInput').value.toLowerCase().trim();
+        const dept = document.getElementById('editDepartmentSelect').value;
+
+        let filtered = products;
+        if (searchQuery) {
+            filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery));
+        }
+        if (dept) {
+            filtered = filtered.filter(p => p.department === dept);
+        }
+
+        if (filtered.length === 0) {
+            let msg = 'Товары не найдены';
+            if (!searchQuery && !dept) msg = 'Введите название для поиска';
+            else if (searchQuery && dept) msg = `Нет товаров в отделе "${dept}" с названием "${searchQuery}"`;
+            else if (dept) msg = `Нет товаров в отделе "${dept}"`;
+            else if (searchQuery) msg = `Нет товаров с названием "${searchQuery}"`;
+            container.innerHTML = `<div style="padding:20px;text-align:center;color:#999;">${msg}</div>`;
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(p => {
+            const days = getDaysLeftFromDate(p.expiry);
+            const status = getStatus(days);
+            html += `
+                <div class="edit-product-item" onclick="openEditProductModal('${p.id}')">
+                    <div class="status-dot ${status.class}"></div>
+                    <div class="info">
+                        <div class="name">${escapeHtml(p.name)}</div>
+                        <div class="details">
+                            ${p.barcode ? `🔢 ${escapeHtml(p.barcode)}` : ''}
+                            ${p.weight ? `⚖️ ${escapeHtml(p.weight)}` : ''}
+                            📅 ${formatDateForList(p.expiry)}
+                            ${p.department ? `🏪 ${escapeHtml(p.department)}` : ''}
+                        </div>
+                    </div>
+                    <div class="edit-icon">✏️</div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function openEditProductModal(productId) {
+        const product = products.find(p => p.id === productId);
+        if (!product) return;
+
+        editTargetId = productId;
+        document.getElementById('editProductId').value = productId;
+        document.getElementById('editProductName').value = product.name;
+        document.getElementById('editProductBarcode').value = product.barcode || '';
+        document.getElementById('editProductWeight').value = product.weight || '';
+        document.getElementById('editProductDepartment').value = product.department || '';
+        document.getElementById('editProductExpiry').value = product.expiry || '';
+
+        document.getElementById('editProductModal').classList.add('active');
+    }
+
+    function closeEditProductModal() {
+        document.getElementById('editProductModal').classList.remove('active');
+        editTargetId = null;
+    }
+
+    function saveEditProduct() {
+        const id = document.getElementById('editProductId').value;
+        const name = document.getElementById('editProductName').value.trim();
+        const barcode = document.getElementById('editProductBarcode').value.trim();
+        const weight = document.getElementById('editProductWeight').value.trim();
+        const department = document.getElementById('editProductDepartment').value;
+        const expiry = document.getElementById('editProductExpiry').value.trim();
+
+        if (!name) { showToast('❌ Введите название'); return; }
+        if (!expiry) { showToast('❌ Введите дату'); return; }
+
+        const parsed = parseDateDMY(expiry);
+        if (!parsed) {
+            showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ');
+            return;
+        }
+
+        const productIndex = products.findIndex(p => p.id === id);
+        if (productIndex === -1) { 
+            showToast('❌ Товар не найден'); 
+            return; 
+        }
+
+        const product = products[productIndex];
+        const oldName = product.name;
+
+        if (barcode) {
+            const exists = products.some(p => p.barcode === barcode && p.id !== id && p.expiry === parsed.raw);
+            if (exists) {
+                showToast('⚠️ Товар с таким штрих-кодом уже существует');
+                return;
+            }
+        }
+
+        product.name = name;
+        product.barcode = barcode;
+        product.weight = weight;
+        product.department = department;
+        product.expiry = parsed.raw;
+
+        saveToLocal();
+        render();
+        closeEditProductModal();
+        showToast(`✅ Товар "${oldName}" обновлён`, 'success');
+        updateSyncStatus('green', `Обновлено (${products.length})`);
+    }
+
+    // ===================== ШАБЛОНЫ =====================
+    function loadTemplates() {
+        const saved = localStorage.getItem('templates_data');
+        if (saved) {
+            try { templates = JSON.parse(saved); } catch(e) { templates = []; }
+        } else {
+            templates = [
+                { name: 'Кетчуп Махеев Болгарский', barcode: '4604258008505', weight: '350г', department: 'Соусы' },
+                { name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка' },
+                { name: 'Соль поваренная', barcode: '4601234567892', weight: '', department: 'Специи' }
+            ];
+            saveTemplates();
+        }
+    }
+
+    function saveTemplates() {
+        localStorage.setItem('templates_data', JSON.stringify(templates));
+    }
+
+    function renderTemplateList() {
+        const container = document.getElementById('templateItemsList');
+        const deptFilter = document.getElementById('templateFilterDept').value;
+        let filtered = templates;
+        if (deptFilter !== 'all') {
+            filtered = filtered.filter(t => t.department === deptFilter);
+        }
+        if (filtered.length === 0) {
+            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">Нет шаблонов${deptFilter !== 'all' ? ` в отделе "${deptFilter}"` : ''}</div>`;
+            return;
+        }
+        let html = '';
+        filtered.forEach((t, idx) => {
+            const deptDisplay = t.department || 'Без отдела';
+            html += `
+                <div class="template-item">
+                    <input type="checkbox" data-idx="${idx}" data-dept="${t.department || ''}">
+                    <span class="info">${escapeHtml(t.name)} ${t.barcode ? `🔢${escapeHtml(t.barcode)}` : ''} ${t.weight ? `⚖️${escapeHtml(t.weight)}` : ''}</span>
+                    <span class="dept">🏪 ${escapeHtml(deptDisplay)}</span>
+                    <button class="template-del" onclick="deleteTemplate(${idx})" title="Удалить шаблон">✕</button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function deleteTemplate(idx) {
+        if (confirm(`Удалить шаблон "${templates[idx].name}"?`)) {
+            templates.splice(idx, 1);
+            saveTemplates();
+            renderTemplateList();
+            showToast('🗑️ Шаблон удалён');
+        }
+    }
+
+    function addTemplateItem() {
+        const name = document.getElementById('templateAddName').value.trim();
+        const barcode = document.getElementById('templateAddBarcode').value.trim();
+        const weight = document.getElementById('templateAddWeight').value.trim();
+        const department = document.getElementById('templateAddDepartment').value;
+
+        if (!name) { showToast('❌ Введите название'); return; }
+        if (!department) { showToast('❌ Выберите отдел'); return; }
+
+        const exists = templates.some(t => t.name.toLowerCase() === name.toLowerCase() && t.barcode === barcode);
+        if (exists) { showToast('⚠️ Такой шаблон уже существует'); return; }
+
+        templates.push({ name, barcode, weight, department });
+        saveTemplates();
+        renderTemplateList();
+        document.getElementById('templateAddName').value = '';
+        document.getElementById('templateAddBarcode').value = '';
+        document.getElementById('templateAddWeight').value = '';
+        showToast('✅ Шаблон добавлен');
+    }
+
+    function addTemplateProducts() {
+        const expiry = document.getElementById('templateExpiry').value.trim();
+        if (!expiry) { showToast('❌ Введите срок годности'); return; }
+        const parsed = parseDateDMY(expiry);
+        if (!parsed) { showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ'); return; }
+
+        const checked = document.querySelectorAll('#templateItemsList input[type="checkbox"]:checked');
+        if (checked.length === 0) { showToast('❌ Выберите хотя бы один шаблон'); return; }
+
+        let added = 0;
+        checked.forEach(cb => {
+            const idx = parseInt(cb.dataset.idx);
+            const t = templates[idx];
+            if (t) {
+                const newProduct = {
+                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                    name: t.name,
+                    barcode: t.barcode || '',
+                    weight: t.weight || '',
+                    department: t.department || '',
+                    expiry: parsed.raw
+                };
+                if (newProduct.barcode) {
+                    const exists = products.some(p => p.barcode === newProduct.barcode && p.expiry === newProduct.expiry);
+                    if (exists) return;
+                }
+                const existsByName = products.some(p => p.name === newProduct.name && p.expiry === newProduct.expiry);
+                if (existsByName) return;
+                
+                products.push(newProduct);
+                added++;
+            }
+        });
+
+        if (added === 0) { showToast('⚠️ Товары уже существуют'); return; }
+        saveToLocal();
+        render();
+        closeTemplateModal();
+        showToast(`✅ Добавлено ${added} товаров по шаблону`, 'success');
+        syncWithGoogle();
+    }
+
+    function openTemplateModal() {
+        document.getElementById('templateModal').classList.add('active');
+        document.getElementById('templateExpiry').value = '';
+        document.getElementById('templateFilterDept').value = 'all';
+        loadTemplates();
+        renderTemplateList();
+    }
+
+    function closeTemplateModal() {
+        document.getElementById('templateModal').classList.remove('active');
+    }
+
+    // ===================== МАССОВЫЕ ОПЕРАЦИИ С ОТДЕЛАМИ =====================
+    function openAddToDepartmentModal() {
+        if (products.length === 0) {
+            showToast('📭 Нет товаров для добавления в отдел');
+            return;
+        }
+        selectedProductIds = new Set();
+        document.getElementById('addToDepartmentModal').classList.add('active');
+        document.getElementById('targetDepartment').value = '';
+        document.getElementById('addSearchInput').value = '';
+        renderProductSelectList();
+    }
+
+    function closeAddToDepartmentModal() {
+        document.getElementById('addToDepartmentModal').classList.remove('active');
+        selectedProductIds = new Set();
+    }
+
+    function filterAddProducts() {
+        renderProductSelectList();
+    }
+
+    function renderProductSelectList() {
+        const container = document.getElementById('productSelectList');
+        const searchQuery = document.getElementById('addSearchInput').value.toLowerCase().trim();
+        
+        let filteredProducts = products;
+        if (searchQuery) {
+            filteredProducts = filteredProducts.filter(p => 
+                p.name.toLowerCase().includes(searchQuery) || 
+                (p.barcode && p.barcode.includes(searchQuery))
+            );
+        }
+        
+        if (filteredProducts.length === 0) {
+            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">${searchQuery ? 'Товары не найдены' : 'Нет товаров'}</div>`;
+            return;
+        }
+        let html = '';
+        filteredProducts.forEach(p => {
+            const isChecked = selectedProductIds.has(p.id);
+            const days = getDaysLeftFromDate(p.expiry);
+            const status = getStatus(days);
+            const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
+            html += `
+                <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="toggleProductSelection('${p.id}')">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleProductSelection('${p.id}')">
+                    <div class="product-info">
+                        <div class="product-name">${escapeHtml(p.name)}</div>
+                        <div class="product-details">
+                            ${p.barcode ? `<span>🔢 ${escapeHtml(p.barcode)}</span>` : ''}
+                            ${departmentHtml}
+                            <span>📅 ${formatDateForList(p.expiry)}</span>
+                            <span class="product-days ${status.class}" style="font-size:10px;">${getStatusText(days)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        updateSelectedCount();
+    }
+
+    function toggleProductSelection(productId) {
+        if (selectedProductIds.has(productId)) {
+            selectedProductIds.delete(productId);
+        } else {
+            selectedProductIds.add(productId);
+        }
+        renderProductSelectList();
+    }
+
+    function selectAllProducts() {
+        const searchQuery = document.getElementById('addSearchInput').value.toLowerCase().trim();
+        let filteredProducts = products;
+        if (searchQuery) {
+            filteredProducts = filteredProducts.filter(p => 
+                p.name.toLowerCase().includes(searchQuery) || 
+                (p.barcode && p.barcode.includes(searchQuery))
+            );
+        }
+        filteredProducts.forEach(p => selectedProductIds.add(p.id));
+        renderProductSelectList();
+    }
+
+    function deselectAllProducts() {
+        selectedProductIds = new Set();
+        renderProductSelectList();
+    }
+
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = `Выбрано: ${selectedProductIds.size} товаров`;
+    }
+
+    async function addSelectedToDepartment() {
+        const department = document.getElementById('targetDepartment').value;
+        if (!department) {
+            showToast('❌ Выберите отдел');
+            return;
+        }
+        if (selectedProductIds.size === 0) {
+            showToast('❌ Выберите хотя бы один товар');
+            return;
+        }
+        
+        let addedCount = 0;
+        products.forEach(p => {
+            if (selectedProductIds.has(p.id)) {
+                p.department = department;
+                addedCount++;
+            }
+        });
+        saveToLocal();
+        render();
+        closeAddToDepartmentModal();
+        showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`);
+        
+        document.querySelectorAll('.dept-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector('.dept-btn-all').classList.add('active');
+        currentDepartment = 'all';
+    }
+
+    // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
     function openRemoveFromDepartmentModal() {
         if (products.length === 0) {
             showToast('📭 Нет товаров для удаления из отдела');
@@ -2504,16 +2128,9 @@
         }
         
         let removedCount = 0;
-        const productsToUpdate = [];
-        
         products.forEach(p => {
             if (removeSelectedProductIds.has(p.id) && p.department) {
-                productsToUpdate.push({
-                    name: p.name,
-                    barcode: p.barcode,
-                    expiry: p.expiry,
-                    department: ''
-                });
+                p.department = '';
                 removedCount++;
             }
         });
@@ -2523,173 +2140,26 @@
             return;
         }
         
-        products.forEach(p => {
-            if (removeSelectedProductIds.has(p.id)) {
-                p.department = '';
-            }
-        });
         saveToLocal();
         render();
         closeRemoveFromDepartmentModal();
         showToast(`✅ ${removedCount} товаров удалено из отделов`);
-        
-        for (const productData of productsToUpdate) {
-            try {
-                await updateDepartmentInGoogle(productData);
-                await new Promise(resolve => setTimeout(resolve, 200));
-            } catch (error) {
-                console.error('Ошибка обновления:', error);
-            }
-        }
     }
 
-    // ===================== МАССОВОЕ ДОБАВЛЕНИЕ В ОТДЕЛ =====================
-    function openAddToDepartmentModal() {
-        if (products.length === 0) {
-            showToast('📭 Нет товаров для добавления в отдел');
-            return;
-        }
-        selectedProductIds = new Set();
-        document.getElementById('addToDepartmentModal').classList.add('active');
-        document.getElementById('targetDepartment').value = '';
-        document.getElementById('addSearchInput').value = '';
-        renderProductSelectList();
-    }
-
-    function closeAddToDepartmentModal() {
-        document.getElementById('addToDepartmentModal').classList.remove('active');
-        selectedProductIds = new Set();
-    }
-
-    function filterAddProducts() {
-        renderProductSelectList();
-    }
-
-    function renderProductSelectList() {
-        const container = document.getElementById('productSelectList');
-        const searchQuery = document.getElementById('addSearchInput').value.toLowerCase().trim();
-        
-        let filteredProducts = products;
-        if (searchQuery) {
-            filteredProducts = filteredProducts.filter(p => 
-                p.name.toLowerCase().includes(searchQuery) || 
-                (p.barcode && p.barcode.includes(searchQuery))
-            );
-        }
-        
-        if (filteredProducts.length === 0) {
-            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">${searchQuery ? 'Товары не найдены' : 'Нет товаров'}</div>`;
-            return;
-        }
-        let html = '';
-        filteredProducts.forEach(p => {
-            const isChecked = selectedProductIds.has(p.id);
-            const days = getDaysLeftFromDate(p.expiry);
-            const status = getStatus(days);
-            const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
-            html += `
-                <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="toggleProductSelection('${p.id}')">
-                    <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleProductSelection('${p.id}')">
-                    <div class="product-info">
-                        <div class="product-name">${escapeHtml(p.name)}</div>
-                        <div class="product-details">
-                            ${p.barcode ? `<span>🔢 ${escapeHtml(p.barcode)}</span>` : ''}
-                            ${departmentHtml}
-                            <span>📅 ${formatDateForList(p.expiry)}</span>
-                            <span class="product-days ${status.class}" style="font-size:10px;">${getStatusText(days)}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-        updateSelectedCount();
-    }
-
-    function toggleProductSelection(productId) {
-        if (selectedProductIds.has(productId)) {
-            selectedProductIds.delete(productId);
-        } else {
-            selectedProductIds.add(productId);
-        }
-        renderProductSelectList();
-    }
-
-    function selectAllProducts() {
-        const searchQuery = document.getElementById('addSearchInput').value.toLowerCase().trim();
-        let filteredProducts = products;
-        if (searchQuery) {
-            filteredProducts = filteredProducts.filter(p => 
-                p.name.toLowerCase().includes(searchQuery) || 
-                (p.barcode && p.barcode.includes(searchQuery))
-            );
-        }
-        filteredProducts.forEach(p => selectedProductIds.add(p.id));
-        renderProductSelectList();
-    }
-
-    function deselectAllProducts() {
-        selectedProductIds = new Set();
-        renderProductSelectList();
-    }
-
-    function updateSelectedCount() {
-        document.getElementById('selectedCount').textContent = `Выбрано: ${selectedProductIds.size} товаров`;
-    }
-
-    async function addSelectedToDepartment() {
-        const department = document.getElementById('targetDepartment').value;
-        if (!department) {
-            showToast('❌ Выберите отдел');
-            return;
-        }
-        if (selectedProductIds.size === 0) {
-            showToast('❌ Выберите хотя бы один товар');
+    async function removeFromDepartment(productId) {
+        const product = products.find(p => p.id === productId);
+        if (!product || !product.department) {
+            showToast('ℹ️ Товар не привязан к отделу');
             return;
         }
         
-        let addedCount = 0;
-        const productsToUpdate = [];
-        
-        products.forEach(p => {
-            if (selectedProductIds.has(p.id)) {
-                productsToUpdate.push({
-                    name: p.name,
-                    barcode: p.barcode,
-                    expiry: p.expiry,
-                    department: department
-                });
-                addedCount++;
-            }
-        });
-        
-        products.forEach(p => {
-            if (selectedProductIds.has(p.id)) {
-                p.department = department;
-            }
-        });
+        const deptName = product.department;
+        product.department = '';
         saveToLocal();
         render();
-        closeAddToDepartmentModal();
-        showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`);
-        
-        for (const productData of productsToUpdate) {
-            try {
-                await updateDepartmentInGoogle(productData);
-                await new Promise(resolve => setTimeout(resolve, 200));
-            } catch (error) {
-                console.error('Ошибка обновления:', error);
-            }
-        }
-        
-        document.querySelectorAll('.dept-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        document.querySelector('.dept-btn-all').classList.add('active');
-        currentDepartment = 'all';
+        showToast(`✅ Товар удалён из отдела "${deptName}"`);
     }
 
-    // ===================== ОЧИСТКА ОТДЕЛА =====================
     async function clearDepartment() {
         if (currentDepartment === 'all') {
             showToast('❌ Сначала выберите отдел');
@@ -2697,17 +2167,11 @@
         }
         
         const deptName = currentDepartment;
-        const productsToUpdate = [];
         let count = 0;
         
         products.forEach(p => {
             if (p.department === deptName) {
-                productsToUpdate.push({
-                    name: p.name,
-                    barcode: p.barcode,
-                    expiry: p.expiry,
-                    department: ''
-                });
+                p.department = '';
                 count++;
             }
         });
@@ -2718,23 +2182,9 @@
         }
         
         if (confirm(`Удалить все ${count} товаров из отдела "${deptName}"?\nТовары останутся в базе.`)) {
-            products.forEach(p => {
-                if (p.department === deptName) {
-                    p.department = '';
-                }
-            });
             saveToLocal();
             render();
             showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`);
-            
-            for (const productData of productsToUpdate) {
-                try {
-                    await updateDepartmentInGoogle(productData);
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                } catch (error) {
-                    console.error('Ошибка обновления:', error);
-                }
-            }
         }
     }
 
@@ -2814,32 +2264,67 @@
         syncWithGoogle();
     }
 
+    async function confirmDelete() {
+        if (!deleteTargetId) {
+            closeDeleteModal();
+            return;
+        }
+        
+        const index = products.findIndex(p => p.id === deleteTargetId);
+        if (index === -1) {
+            closeDeleteModal();
+            return;
+        }
+        
+        const product = products[index];
+        products.splice(index, 1);
+        saveToLocal();
+        render();
+        showToast('🗑️ Товар удалён');
+        closeDeleteModal();
+    }
+
     async function clearAll() {
         if (products.length === 0) {
             showToast('📭 Список пуст');
             return;
         }
-        if (!confirm('⚠️ ВНИМАНИЕ! Это действие УДАЛИТ ВСЕ товары с сайта и из таблицы!\n\nВосстановить данные будет НЕВОЗМОЖНО!\n\nВы уверены, что хотите продолжить?')) {
+        if (!confirm('⚠️ ВНИМАНИЕ! Это действие УДАЛИТ ВСЕ товары!\n\nВосстановить данные будет НЕВОЗМОЖНО!\n\nВы уверены, что хотите продолжить?')) {
             return;
         }
-        if (!confirm('🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\nВы действительно хотите удалить ВСЕ товары?\n\nНажмите "ОК" для подтверждения.')) {
+        if (!confirm('🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\nВы действительно хотите удалить ВСЕ товары?')) {
             return;
         }
         products = [];
         saveToLocal();
         render();
-        showToast('🗑️ Все товары удалены с сайта');
-        const sheetId = getSheetId();
-        if (sheetId) {
-            try {
-                await fetch(`${SHEET_URL}${sheetId}`, { method: 'DELETE' });
-                showToast('🗑️ Таблица очищена');
-                await loadFromGoogle();
-            } catch (error) {
-                console.error('Ошибка очистки таблицы:', error);
-                showToast('⚠️ Ошибка очистки таблицы');
-            }
+        showToast('🗑️ Все товары удалены');
+    }
+
+    // ===================== СИНХРОНИЗАЦИЯ =====================
+    async function syncWithGoogle() {
+        if (isSyncing) return;
+        isSyncing = true;
+        
+        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
+            showToast('❌ Нет API-ключа. Сначала получите ключ!');
+            isSyncing = false;
+            return;
         }
+
+        try {
+            await loadFromGoogle();
+            showToast('✅ Синхронизация завершена!');
+        } catch (error) {
+            console.error('Ошибка:', error);
+            showToast('⚠️ Ошибка синхронизации');
+        }
+        isSyncing = false;
+    }
+
+    async function rebuildTable() {
+        showToast('🔄 Перестройка таблицы...');
+        await syncWithGoogle();
     }
 
     // ===================== ЭКСПОРТ CSV =====================
@@ -3083,12 +2568,7 @@
     async function init() {
         loadTheme();
         loadTemplates();
-        const sheetId = getSheetId();
-        if (sheetId) {
-            await loadFromGoogle();
-        } else {
-            loadFromLocal();
-        }
+        await loadFromGoogle();
         startDateUpdater();
 
         setTimeout(() => {
@@ -3102,12 +2582,6 @@
                 }
             }
         }, 1000);
-
-        setInterval(() => {
-            if (getSheetId() && !isSyncing) {
-                loadFromGoogle();
-            }
-        }, 30000);
     }
 
     init();
