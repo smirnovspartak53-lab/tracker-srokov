@@ -897,13 +897,13 @@
 
 <script>
     // ============================================
-    //  КОНФИГУРАЦИЯ (Google API)
+    // КОНФИГУРАЦИЯ
     // ============================================
     const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE';
     const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4';
     const SHEET_NAME = 'Лист1';
 
-    const SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
+    const SHEET_READ_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
     const SHEET_APPEND_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
     const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
 
@@ -1012,16 +1012,6 @@
         return div.innerHTML;
     }
 
-    function getProductKey(product) {
-        const name = (product.name || '').trim().toLowerCase();
-        const barcode = (product.barcode || '').trim();
-        const expiry = (product.expiry || '').trim();
-        if (barcode) {
-            return `barcode_${barcode}_${expiry}`;
-        }
-        return `name_${name}_${expiry}`;
-    }
-
     // ===================== ВЕС =====================
     function parseWeight(weightStr) {
         if (!weightStr) return { value: null, unit: null, display: '' };
@@ -1087,35 +1077,26 @@
 
     // Загрузка данных из Google
     async function loadFromGoogle() {
-        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
-            updateSyncStatus('red', 'Нет API-ключа');
-            loadFromLocal();
-            return;
-        }
-
         try {
             updateSyncStatus('yellow', 'Загрузка...');
-            const response = await fetch(SHEET_URL);
+            const response = await fetch(SHEET_READ_URL);
             
-            if (!response.ok) {
-                if (response.status === 404) {
-                    updateSyncStatus('red', 'Таблица не найдена');
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                loadFromLocal();
+            if (response.status === 404) {
+                updateSyncStatus('red', 'Таблица не найдена');
                 return;
             }
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data = await response.json();
             
-            if (data && data.values && data.values.length > 0) {
+            if (data && data.values && data.values.length > 1) {
                 const rows = data.values.slice(1);
-                const localProducts = [];
+                const loadedProducts = [];
 
                 rows.forEach(row => {
-                    if (row.length >= 5 && row[0] && row[0].trim()) {
-                        localProducts.push({
+                    if (row.length >= 1 && row[0] && row[0].trim()) {
+                        loadedProducts.push({
                             id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                             name: row[0] || 'Без названия',
                             barcode: row[1] || '',
@@ -1126,36 +1107,29 @@
                     }
                 });
 
-                if (localProducts.length > 0) {
-                    products = localProducts;
+                if (loadedProducts.length > 0) {
+                    products = loadedProducts;
                     saveToLocal();
-                    showToast(`✅ Загружено ${products.length} товаров из таблицы`);
+                    showToast(`✅ Загружено ${products.length} товаров`);
                 } else {
                     showToast('📭 Таблица пуста');
-                    loadFromLocal();
                 }
                 
                 render();
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
             } else {
                 updateSyncStatus('green', 'Таблица пуста');
-                loadFromLocal();
                 render();
             }
         } catch (error) {
             console.error('Ошибка загрузки:', error);
             updateSyncStatus('red', 'Ошибка загрузки');
-            loadFromLocal();
-            showToast('⚠️ Ошибка синхронизации. Использую локальные данные.');
+            showToast('⚠️ Ошибка синхронизации');
         }
     }
 
     // Добавление товара в Google
     async function addToGoogle(product) {
-        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
-            return false;
-        }
-
         try {
             const values = [[
                 product.name || '',
@@ -1171,51 +1145,37 @@
                 body: JSON.stringify({ values: values })
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            console.log('✅ Товар добавлен в таблицу');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return true;
         } catch (error) {
-            console.error('Ошибка добавления в таблицу:', error);
+            console.error('Ошибка добавления:', error);
             return false;
         }
     }
 
     // Удаление товара из Google
     async function deleteFromGoogle(product) {
-        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
-            return false;
-        }
-
         try {
-            const response = await fetch(SHEET_URL);
+            const response = await fetch(SHEET_READ_URL);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             
-            if (!data.values || data.values.length === 0) {
-                return false;
-            }
+            if (!data.values || data.values.length === 0) return false;
 
             const header = data.values[0] || ['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности'];
             const rows = data.values.slice(1);
             
             const newRows = rows.filter(row => {
-                if (row.length < 5) return true;
-                const productBarcode = product.barcode || '';
-                const productName = product.name || '';
-                const productExpiry = product.expiry || '';
+                if (row.length < 1) return true;
                 const rowBarcode = row[1] || '';
                 const rowName = row[0] || '';
                 const rowExpiry = row[4] || '';
+                const productBarcode = product.barcode || '';
+                const productName = product.name || '';
+                const productExpiry = product.expiry || '';
                 
-                if (productBarcode && rowBarcode === productBarcode && rowExpiry === productExpiry) {
-                    return false;
-                }
-                if (!productBarcode && rowName === productName && rowExpiry === productExpiry) {
-                    return false;
-                }
+                if (productBarcode && rowBarcode === productBarcode && rowExpiry === productExpiry) return false;
+                if (!productBarcode && rowName === productName && rowExpiry === productExpiry) return false;
                 return true;
             });
 
@@ -1233,37 +1193,29 @@
                 });
             }
 
-            console.log('✅ Товар удалён из таблицы');
             return true;
         } catch (error) {
-            console.error('Ошибка удаления из таблицы:', error);
+            console.error('Ошибка удаления:', error);
             return false;
         }
     }
 
     // Очистка всей таблицы
     async function clearGoogleSheet() {
-        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
-            return false;
-        }
-
         try {
             await fetch(SHEET_CLEAR_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-            console.log('✅ Таблица очищена');
-            
             const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
             await fetch(SHEET_APPEND_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ values: header })
             });
-            
             return true;
         } catch (error) {
-            console.error('Ошибка очистки таблицы:', error);
+            console.error('Ошибка очистки:', error);
             return false;
         }
     }
@@ -1284,7 +1236,190 @@
         localStorage.setItem('products_tracker_local', JSON.stringify(products));
     }
 
-    // ===================== ФИЛЬТРЫ, СОРТИРОВКА И ОТРИСОВКА =====================
+    // ===================== УМНЫЕ НАПОМИНАНИЯ =====================
+    function checkReminders() {
+        let expired = 0;
+        let expiring = 0;
+        let reminders = [];
+
+        products.forEach(p => {
+            const days = getDaysLeftFromDate(p.expiry);
+            if (days < 0) {
+                expired++;
+                reminders.push({ product: p, days: days, type: 'danger', text: `Просрочен на ${Math.abs(days)} дней` });
+            } else if (days === 0 || days === 1) {
+                expiring++;
+                reminders.push({ product: p, days: days, type: 'warning', text: `Истекает ${days === 0 ? 'СЕГОДНЯ!' : 'ЗАВТРА!'}` });
+            }
+        });
+
+        const badge = document.getElementById('expiredBadge');
+        if (expired > 0) {
+            badge.textContent = expired;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+
+        const notifyBadge = document.getElementById('notifyBadge');
+        const total = expired + expiring;
+        if (total > 0) {
+            notifyBadge.textContent = total;
+            notifyBadge.style.display = 'inline-block';
+        } else {
+            notifyBadge.style.display = 'none';
+        }
+
+        return reminders;
+    }
+
+    function showReminders() {
+        const reminders = checkReminders();
+        const container = document.getElementById('remindersList');
+
+        if (reminders.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center;padding:30px;">
+                    <div style="font-size:48px;">🎉</div>
+                    <p style="color:#888;margin-top:10px;">Все товары в порядке!<br>Нет критических сроков.</p>
+                </div>
+            `;
+        } else {
+            let html = '';
+            reminders.forEach(r => {
+                const cls = r.type === 'danger' ? 'danger' : 'warning';
+                const daysCls = r.days < 0 ? 'red' : 'orange';
+                const daysText = r.days < 0 ? `${Math.abs(r.days)} дн.` : `${r.days} дн.`;
+                html += `
+                    <div class="reminder-item ${cls}">
+                        <div class="icon">${r.type === 'danger' ? '🚨' : '⚠️'}</div>
+                        <div class="text">
+                            <div class="title">${escapeHtml(r.product.name)}</div>
+                            <div class="sub">📅 ${formatDateForList(r.product.expiry)} ${r.product.department ? '🏪 ' + escapeHtml(r.product.department) : ''}</div>
+                            <div class="sub">${r.text}</div>
+                        </div>
+                        <div class="days ${daysCls}">${daysText}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        document.getElementById('remindersModal').classList.add('active');
+    }
+
+    function closeRemindersModal() {
+        document.getElementById('remindersModal').classList.remove('active');
+    }
+
+    function showExpiryWarning(product) {
+        const days = getDaysLeftFromDate(product.expiry);
+        if (days < 0) {
+            showToast(`🚨 Товар "${product.name}" ПРОСРОЧЕН!`, 'danger');
+        } else if (days === 0) {
+            showToast(`⚠️ Товар "${product.name}" истекает СЕГОДНЯ!`, 'warning');
+        } else if (days === 1) {
+            showToast(`⚠️ Товар "${product.name}" истекает ЗАВТРА!`, 'warning');
+        } else if (days <= 3) {
+            showToast(`⏳ Товар "${product.name}" истекает через ${days} дня`, 'warning');
+        }
+    }
+
+    // ===================== КАЛЬКУЛЯТОР =====================
+    function toggleCalculator() {
+        const calculator = document.getElementById('calculator');
+        calculator.classList.toggle('active');
+        if (calculator.classList.contains('active')) {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('manufactureDate').value = today;
+            document.getElementById('calculatorResult').style.display = 'none';
+        }
+    }
+
+    function calculateExpiry() {
+        const manufactureDate = document.getElementById('manufactureDate').value;
+        const shelfLife = parseInt(document.getElementById('shelfLife').value);
+        const unit = document.getElementById('shelfLifeUnit').value;
+
+        if (!manufactureDate) { showToast('❌ Выберите дату изготовления'); return; }
+        if (!shelfLife || shelfLife < 1) { showToast('❌ Введите срок годности'); return; }
+
+        const date = new Date(manufactureDate);
+        
+        if (unit === 'days') date.setDate(date.getDate() + shelfLife);
+        else if (unit === 'months') date.setMonth(date.getMonth() + shelfLife);
+        else if (unit === 'years') date.setFullYear(date.getFullYear() + shelfLife);
+
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const expiryDateStr = `${day}.${month}.${year}`;
+        calculatedExpiry = expiryDateStr;
+
+        document.getElementById('expiryDate').textContent = expiryDateStr;
+        document.getElementById('calculatorResult').style.display = 'block';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiryDate = new Date(year, date.getMonth(), date.getDate());
+        const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+        const daysElement = document.getElementById('daysLeft');
+        const statusInfo = document.getElementById('statusInfo');
+
+        if (daysLeft < 0) {
+            daysElement.textContent = `⚠️ Просрочен на ${Math.abs(daysLeft)} дней`;
+            daysElement.className = 'days red';
+            statusInfo.textContent = '🔴 Товар просрочен!';
+        } else if (daysLeft === 0) {
+            daysElement.textContent = '⚠️ Истекает СЕГОДНЯ!';
+            daysElement.className = 'days red';
+            statusInfo.textContent = '🟡 Срочно использовать!';
+        } else if (daysLeft <= 3) {
+            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days orange';
+            statusInfo.textContent = '🟠 Скоро истекает';
+        } else if (daysLeft <= 7) {
+            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days orange';
+            statusInfo.textContent = '🟡 Использовать в ближайшее время';
+        } else if (daysLeft <= 30) {
+            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days green';
+            statusInfo.textContent = '🟢 Срок нормальный';
+        } else {
+            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
+            daysElement.className = 'days green';
+            statusInfo.textContent = '🟢 Срок достаточный';
+        }
+
+        showToast(`✅ Рассчитано: годен до ${expiryDateStr}`);
+    }
+
+    function addCalculatedProduct() {
+        if (!calculatedExpiry) { showToast('❌ Сначала рассчитайте срок'); return; }
+        openAddModal();
+        document.getElementById('productExpiry').value = calculatedExpiry;
+        document.getElementById('productExpiry').style.borderColor = '#27ae60';
+        document.getElementById('productExpiry').style.background = '#f0fff0';
+        showToast(`📅 Срок годности: ${calculatedExpiry}`);
+        document.getElementById('calculator').classList.remove('active');
+    }
+
+    // ===================== ПОИСК =====================
+    function onSearchInput() {
+        searchQuery = document.getElementById('productSearchInput').value.trim();
+        render();
+    }
+
+    function clearSearch() {
+        document.getElementById('productSearchInput').value = '';
+        searchQuery = '';
+        render();
+        showToast('🔍 Поиск очищен');
+    }
+
+    // ===================== ФИЛЬТРЫ И СОРТИРОВКА =====================
     function filterDepartment(department) {
         currentDepartment = department;
         document.querySelectorAll('.dept-btn').forEach(btn => {
@@ -1292,11 +1427,6 @@
             btn.classList.toggle('active', isActive);
         });
         render();
-        if (department === 'all') {
-            showToast('🏪 Показаны все товары');
-        } else {
-            showToast(`🏪 Отдел: ${department}`);
-        }
     }
 
     function filterExpired() { currentFilter = 'expired'; render(); }
@@ -1313,6 +1443,7 @@
         render();
     }
 
+    // ===================== ОТРИСОВКА =====================
     function render() {
         const today = getTodayDate();
         document.getElementById('todayDate').textContent = '📅 ' + today.formatted;
@@ -1445,202 +1576,6 @@
         list.innerHTML = html;
     }
 
-    // ===================== УМНЫЕ НАПОМИНАНИЯ =====================
-    function checkReminders() {
-        let expired = 0;
-        let expiring = 0;
-        let reminders = [];
-
-        products.forEach(p => {
-            const days = getDaysLeftFromDate(p.expiry);
-            if (days < 0) {
-                expired++;
-                reminders.push({ product: p, days: days, type: 'danger', text: `Просрочен на ${Math.abs(days)} дней` });
-            } else if (days === 0 || days === 1) {
-                expiring++;
-                reminders.push({ product: p, days: days, type: 'warning', text: `Истекает ${days === 0 ? 'СЕГОДНЯ!' : 'ЗАВТРА!'}` });
-            }
-        });
-
-        const badge = document.getElementById('expiredBadge');
-        if (expired > 0) {
-            badge.textContent = expired;
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
-        }
-
-        const notifyBadge = document.getElementById('notifyBadge');
-        const total = expired + expiring;
-        if (total > 0) {
-            notifyBadge.textContent = total;
-            notifyBadge.style.display = 'inline-block';
-        } else {
-            notifyBadge.style.display = 'none';
-        }
-
-        return reminders;
-    }
-
-    function showReminders() {
-        const reminders = checkReminders();
-        const container = document.getElementById('remindersList');
-
-        if (reminders.length === 0) {
-            container.innerHTML = `
-                <div style="text-align:center;padding:30px;">
-                    <div style="font-size:48px;">🎉</div>
-                    <p style="color:#888;margin-top:10px;">Все товары в порядке!<br>Нет критических сроков.</p>
-                </div>
-            `;
-        } else {
-            let html = '';
-            reminders.forEach(r => {
-                const cls = r.type === 'danger' ? 'danger' : 'warning';
-                const daysCls = r.days < 0 ? 'red' : 'orange';
-                const daysText = r.days < 0 ? `${Math.abs(r.days)} дн.` : `${r.days} дн.`;
-                html += `
-                    <div class="reminder-item ${cls}">
-                        <div class="icon">${r.type === 'danger' ? '🚨' : '⚠️'}</div>
-                        <div class="text">
-                            <div class="title">${escapeHtml(r.product.name)}</div>
-                            <div class="sub">📅 ${formatDateForList(r.product.expiry)} ${r.product.department ? '🏪 ' + escapeHtml(r.product.department) : ''}</div>
-                            <div class="sub">${r.text}</div>
-                        </div>
-                        <div class="days ${daysCls}">${daysText}</div>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-        }
-
-        document.getElementById('remindersModal').classList.add('active');
-    }
-
-    function closeRemindersModal() {
-        document.getElementById('remindersModal').classList.remove('active');
-    }
-
-    function showExpiryWarning(product) {
-        const days = getDaysLeftFromDate(product.expiry);
-        if (days < 0) {
-            showToast(`🚨 Товар "${product.name}" ПРОСРОЧЕН!`, 'danger');
-        } else if (days === 0) {
-            showToast(`⚠️ Товар "${product.name}" истекает СЕГОДНЯ!`, 'warning');
-        } else if (days === 1) {
-            showToast(`⚠️ Товар "${product.name}" истекает ЗАВТРА!`, 'warning');
-        } else if (days <= 3) {
-            showToast(`⏳ Товар "${product.name}" истекает через ${days} дня`, 'warning');
-        }
-    }
-
-    // ===================== КАЛЬКУЛЯТОР =====================
-    function toggleCalculator() {
-        const calculator = document.getElementById('calculator');
-        calculator.classList.toggle('active');
-        if (calculator.classList.contains('active')) {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('manufactureDate').value = today;
-            document.getElementById('calculatorResult').style.display = 'none';
-        }
-    }
-
-    function calculateExpiry() {
-        const manufactureDate = document.getElementById('manufactureDate').value;
-        const shelfLife = parseInt(document.getElementById('shelfLife').value);
-        const unit = document.getElementById('shelfLifeUnit').value;
-
-        if (!manufactureDate) {
-            showToast('❌ Выберите дату изготовления');
-            return;
-        }
-        if (!shelfLife || shelfLife < 1) {
-            showToast('❌ Введите срок годности');
-            return;
-        }
-
-        const date = new Date(manufactureDate);
-        
-        if (unit === 'days') {
-            date.setDate(date.getDate() + shelfLife);
-        } else if (unit === 'months') {
-            date.setMonth(date.getMonth() + shelfLife);
-        } else if (unit === 'years') {
-            date.setFullYear(date.getFullYear() + shelfLife);
-        }
-
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        const expiryDateStr = `${day}.${month}.${year}`;
-        calculatedExpiry = expiryDateStr;
-
-        document.getElementById('expiryDate').textContent = expiryDateStr;
-        document.getElementById('calculatorResult').style.display = 'block';
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const expiryDate = new Date(year, date.getMonth(), date.getDate());
-        const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-
-        const daysElement = document.getElementById('daysLeft');
-        const statusInfo = document.getElementById('statusInfo');
-
-        if (daysLeft < 0) {
-            daysElement.textContent = `⚠️ Просрочен на ${Math.abs(daysLeft)} дней`;
-            daysElement.className = 'days red';
-            statusInfo.textContent = '🔴 Товар просрочен!';
-        } else if (daysLeft === 0) {
-            daysElement.textContent = '⚠️ Истекает СЕГОДНЯ!';
-            daysElement.className = 'days red';
-            statusInfo.textContent = '🟡 Срочно использовать!';
-        } else if (daysLeft <= 3) {
-            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days orange';
-            statusInfo.textContent = '🟠 Скоро истекает';
-        } else if (daysLeft <= 7) {
-            daysElement.textContent = `⏳ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days orange';
-            statusInfo.textContent = '🟡 Использовать в ближайшее время';
-        } else if (daysLeft <= 30) {
-            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days green';
-            statusInfo.textContent = '🟢 Срок нормальный';
-        } else {
-            daysElement.textContent = `✅ Осталось ${daysLeft} дней`;
-            daysElement.className = 'days green';
-            statusInfo.textContent = '🟢 Срок достаточный';
-        }
-
-        showToast(`✅ Рассчитано: годен до ${expiryDateStr}`);
-    }
-
-    function addCalculatedProduct() {
-        if (!calculatedExpiry) {
-            showToast('❌ Сначала рассчитайте срок');
-            return;
-        }
-        openAddModal();
-        document.getElementById('productExpiry').value = calculatedExpiry;
-        document.getElementById('productExpiry').style.borderColor = '#27ae60';
-        document.getElementById('productExpiry').style.background = '#f0fff0';
-        showToast(`📅 Срок годности: ${calculatedExpiry}`);
-        document.getElementById('calculator').classList.remove('active');
-    }
-
-    // ===================== ПОИСК =====================
-    function onSearchInput() {
-        searchQuery = document.getElementById('productSearchInput').value.trim();
-        render();
-    }
-
-    function clearSearch() {
-        document.getElementById('productSearchInput').value = '';
-        searchQuery = '';
-        render();
-        showToast('🔍 Поиск очищен');
-    }
-
     // ===================== РЕДАКТОР ПО ОТДЕЛАМ =====================
     function openEditByDepartmentModal() {
         document.getElementById('editByDepartmentModal').classList.add('active');
@@ -1660,12 +1595,8 @@
         const dept = document.getElementById('editDepartmentSelect').value;
 
         let filtered = products;
-        if (searchQuery) {
-            filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery));
-        }
-        if (dept) {
-            filtered = filtered.filter(p => p.department === dept);
-        }
+        if (searchQuery) filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery));
+        if (dept) filtered = filtered.filter(p => p.department === dept);
 
         if (filtered.length === 0) {
             let msg = 'Товары не найдены';
@@ -1732,29 +1663,14 @@
         if (!expiry) { showToast('❌ Введите дату'); return; }
 
         const parsed = parseDateDMY(expiry);
-        if (!parsed) {
-            showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ');
-            return;
-        }
+        if (!parsed) { showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ'); return; }
 
         const productIndex = products.findIndex(p => p.id === id);
-        if (productIndex === -1) { 
-            showToast('❌ Товар не найден'); 
-            return; 
-        }
+        if (productIndex === -1) { showToast('❌ Товар не найден'); return; }
 
         const product = products[productIndex];
-        const oldName = product.name;
         const oldBarcode = product.barcode;
         const oldExpiry = product.expiry;
-
-        if (barcode) {
-            const exists = products.some(p => p.barcode === barcode && p.id !== id && p.expiry === parsed.raw);
-            if (exists) {
-                showToast('⚠️ Товар с таким штрих-кодом уже существует');
-                return;
-            }
-        }
 
         product.name = name;
         product.barcode = barcode;
@@ -1765,10 +1681,9 @@
         saveToLocal();
         render();
         closeEditProductModal();
-        showToast(`✅ Товар "${oldName}" обновлён`, 'success');
-        updateSyncStatus('green', `Обновлено (${products.length})`);
+        showToast(`✅ Товар обновлён`, 'success');
         
-        deleteFromGoogle({ name: oldName, barcode: oldBarcode, expiry: oldExpiry }).then(() => {
+        deleteFromGoogle({ name: product.name, barcode: oldBarcode, expiry: oldExpiry }).then(() => {
             addToGoogle(product);
         });
     }
@@ -1796,11 +1711,10 @@
         const container = document.getElementById('templateItemsList');
         const deptFilter = document.getElementById('templateFilterDept').value;
         let filtered = templates;
-        if (deptFilter !== 'all') {
-            filtered = filtered.filter(t => t.department === deptFilter);
-        }
+        if (deptFilter !== 'all') filtered = filtered.filter(t => t.department === deptFilter);
+        
         if (filtered.length === 0) {
-            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">Нет шаблонов${deptFilter !== 'all' ? ` в отделе "${deptFilter}"` : ''}</div>`;
+            container.innerHTML = `<div style="padding:20px;text-align:center;color:#999;">Нет шаблонов</div>`;
             return;
         }
         let html = '';
@@ -1904,10 +1818,7 @@
 
     // ===================== МАССОВЫЕ ОПЕРАЦИИ С ОТДЕЛАМИ =====================
     function openAddToDepartmentModal() {
-        if (products.length === 0) {
-            showToast('📭 Нет товаров для добавления в отдел');
-            return;
-        }
+        if (products.length === 0) { showToast('📭 Нет товаров'); return; }
         selectedProductIds = new Set();
         document.getElementById('addToDepartmentModal').classList.add('active');
         document.getElementById('targetDepartment').value = '';
@@ -1920,9 +1831,7 @@
         selectedProductIds = new Set();
     }
 
-    function filterAddProducts() {
-        renderProductSelectList();
-    }
+    function filterAddProducts() { renderProductSelectList(); }
 
     function renderProductSelectList() {
         const container = document.getElementById('productSelectList');
@@ -1937,7 +1846,7 @@
         }
         
         if (filteredProducts.length === 0) {
-            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">${searchQuery ? 'Товары не найдены' : 'Нет товаров'}</div>`;
+            container.innerHTML = `<div style="padding:20px;text-align:center;color:#999;">${searchQuery ? 'Товары не найдены' : 'Нет товаров'}</div>`;
             return;
         }
         let html = '';
@@ -1945,7 +1854,6 @@
             const isChecked = selectedProductIds.has(p.id);
             const days = getDaysLeftFromDate(p.expiry);
             const status = getStatus(days);
-            const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
             html += `
                 <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="toggleProductSelection('${p.id}')">
                     <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleProductSelection('${p.id}')">
@@ -1953,9 +1861,8 @@
                         <div class="product-name">${escapeHtml(p.name)}</div>
                         <div class="product-details">
                             ${p.barcode ? `<span>🔢 ${escapeHtml(p.barcode)}</span>` : ''}
-                            ${departmentHtml}
+                            ${p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : ''}
                             <span>📅 ${formatDateForList(p.expiry)}</span>
-                            <span class="product-days ${status.class}" style="font-size:10px;">${getStatusText(days)}</span>
                         </div>
                     </div>
                 </div>
@@ -1966,11 +1873,8 @@
     }
 
     function toggleProductSelection(productId) {
-        if (selectedProductIds.has(productId)) {
-            selectedProductIds.delete(productId);
-        } else {
-            selectedProductIds.add(productId);
-        }
+        if (selectedProductIds.has(productId)) selectedProductIds.delete(productId);
+        else selectedProductIds.add(productId);
         renderProductSelectList();
     }
 
@@ -1998,14 +1902,8 @@
 
     async function addSelectedToDepartment() {
         const department = document.getElementById('targetDepartment').value;
-        if (!department) {
-            showToast('❌ Выберите отдел');
-            return;
-        }
-        if (selectedProductIds.size === 0) {
-            showToast('❌ Выберите хотя бы один товар');
-            return;
-        }
+        if (!department) { showToast('❌ Выберите отдел'); return; }
+        if (selectedProductIds.size === 0) { showToast('❌ Выберите хотя бы один товар'); return; }
         
         let addedCount = 0;
         products.forEach(p => {
@@ -2018,20 +1916,11 @@
         render();
         closeAddToDepartmentModal();
         showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`);
-        
-        document.querySelectorAll('.dept-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        document.querySelector('.dept-btn-all').classList.add('active');
-        currentDepartment = 'all';
     }
 
     // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
     function openRemoveFromDepartmentModal() {
-        if (products.length === 0) {
-            showToast('📭 Нет товаров для удаления из отдела');
-            return;
-        }
+        if (products.length === 0) { showToast('📭 Нет товаров'); return; }
         removeSelectedProductIds = new Set();
         document.getElementById('removeFromDepartmentModal').classList.add('active');
         document.getElementById('removeDepartment').value = '';
@@ -2044,9 +1933,7 @@
         removeSelectedProductIds = new Set();
     }
 
-    function filterRemoveProducts() {
-        renderRemoveProductSelectList();
-    }
+    function filterRemoveProducts() { renderRemoveProductSelectList(); }
 
     function renderRemoveProductSelectList() {
         const container = document.getElementById('removeProductSelectList');
@@ -2054,9 +1941,7 @@
         const searchQuery = document.getElementById('removeSearchInput').value.toLowerCase().trim();
         
         let filteredProducts = products;
-        if (deptFilter) {
-            filteredProducts = filteredProducts.filter(p => p.department === deptFilter);
-        }
+        if (deptFilter) filteredProducts = filteredProducts.filter(p => p.department === deptFilter);
         if (searchQuery) {
             filteredProducts = filteredProducts.filter(p => 
                 p.name.toLowerCase().includes(searchQuery) || 
@@ -2065,17 +1950,14 @@
         }
         
         if (filteredProducts.length === 0) {
-            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">
-                ${deptFilter ? `Нет товаров в отделе "${deptFilter}"` : 'Выберите отдел для отображения товаров'}
+            container.innerHTML = `<div style="padding:20px;text-align:center;color:#999;">
+                ${deptFilter ? `Нет товаров в отделе "${deptFilter}"` : 'Выберите отдел'}
             </div>`;
             return;
         }
         let html = '';
         filteredProducts.forEach(p => {
             const isChecked = removeSelectedProductIds.has(p.id);
-            const days = getDaysLeftFromDate(p.expiry);
-            const status = getStatus(days);
-            const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
             html += `
                 <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="toggleRemoveProductSelection('${p.id}')">
                     <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleRemoveProductSelection('${p.id}')">
@@ -2083,9 +1965,7 @@
                         <div class="product-name">${escapeHtml(p.name)}</div>
                         <div class="product-details">
                             ${p.barcode ? `<span>🔢 ${escapeHtml(p.barcode)}</span>` : ''}
-                            ${departmentHtml}
-                            <span>📅 ${formatDateForList(p.expiry)}</span>
-                            <span class="product-days ${status.class}" style="font-size:10px;">${getStatusText(days)}</span>
+                            📅 ${formatDateForList(p.expiry)}
                         </div>
                     </div>
                 </div>
@@ -2096,11 +1976,8 @@
     }
 
     function toggleRemoveProductSelection(productId) {
-        if (removeSelectedProductIds.has(productId)) {
-            removeSelectedProductIds.delete(productId);
-        } else {
-            removeSelectedProductIds.add(productId);
-        }
+        if (removeSelectedProductIds.has(productId)) removeSelectedProductIds.delete(productId);
+        else removeSelectedProductIds.add(productId);
         renderRemoveProductSelectList();
     }
 
@@ -2108,9 +1985,7 @@
         const deptFilter = document.getElementById('removeDepartment').value;
         const searchQuery = document.getElementById('removeSearchInput').value.toLowerCase().trim();
         let filteredProducts = products;
-        if (deptFilter) {
-            filteredProducts = filteredProducts.filter(p => p.department === deptFilter);
-        }
+        if (deptFilter) filteredProducts = filteredProducts.filter(p => p.department === deptFilter);
         if (searchQuery) {
             filteredProducts = filteredProducts.filter(p => 
                 p.name.toLowerCase().includes(searchQuery) || 
@@ -2131,10 +2006,7 @@
     }
 
     async function removeSelectedFromDepartment() {
-        if (removeSelectedProductIds.size === 0) {
-            showToast('❌ Выберите хотя бы один товар');
-            return;
-        }
+        if (removeSelectedProductIds.size === 0) { showToast('❌ Выберите товары'); return; }
         
         let removedCount = 0;
         products.forEach(p => {
@@ -2143,12 +2015,6 @@
                 removedCount++;
             }
         });
-        
-        if (removedCount === 0) {
-            showToast('ℹ️ Нет товаров с отделами для удаления');
-            return;
-        }
-        
         saveToLocal();
         render();
         closeRemoveFromDepartmentModal();
@@ -2157,27 +2023,19 @@
 
     async function removeFromDepartment(productId) {
         const product = products.find(p => p.id === productId);
-        if (!product || !product.department) {
-            showToast('ℹ️ Товар не привязан к отделу');
-            return;
-        }
+        if (!product || !product.department) { showToast('ℹ️ Товар не привязан к отделу'); return; }
         
-        const deptName = product.department;
         product.department = '';
         saveToLocal();
         render();
-        showToast(`✅ Товар удалён из отдела "${deptName}"`);
+        showToast(`✅ Товар удалён из отдела`);
     }
 
     async function clearDepartment() {
-        if (currentDepartment === 'all') {
-            showToast('❌ Сначала выберите отдел');
-            return;
-        }
+        if (currentDepartment === 'all') { showToast('❌ Сначала выберите отдел'); return; }
         
         const deptName = currentDepartment;
         let count = 0;
-        
         products.forEach(p => {
             if (p.department === deptName) {
                 p.department = '';
@@ -2185,12 +2043,9 @@
             }
         });
         
-        if (count === 0) {
-            showToast(`ℹ️ В отделе "${deptName}" нет товаров`);
-            return;
-        }
+        if (count === 0) { showToast(`ℹ️ В отделе "${deptName}" нет товаров`); return; }
         
-        if (confirm(`Удалить все ${count} товаров из отдела "${deptName}"?\nТовары останутся в базе.`)) {
+        if (confirm(`Удалить все ${count} товаров из отдела "${deptName}"?`)) {
             saveToLocal();
             render();
             showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`);
@@ -2240,18 +2095,7 @@
         if (!expiryInput) { showToast('❌ Введите дату'); return; }
 
         const parsed = parseDateDMY(expiryInput);
-        if (!parsed) {
-            showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ');
-            return;
-        }
-
-        if (barcode) {
-            const exists = products.some(p => p.barcode === barcode && p.expiry === parsed.raw);
-            if (exists) {
-                showToast('⚠️ Товар с таким штрих-кодом уже существует');
-                return;
-            }
-        }
+        if (!parsed) { showToast('❌ Неверный формат даты! Используйте ДД.ММ.ГГГГ'); return; }
 
         const newProduct = {
             id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -2272,23 +2116,19 @@
         addToGoogle(newProduct).then(success => {
             if (success) {
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
+                showToast('✅ Товар сохранён в таблице');
             } else {
                 updateSyncStatus('orange', 'Ошибка синхронизации');
+                showToast('⚠️ Ошибка сохранения в таблицу');
             }
         });
     }
 
     async function confirmDelete() {
-        if (!deleteTargetId) {
-            closeDeleteModal();
-            return;
-        }
+        if (!deleteTargetId) { closeDeleteModal(); return; }
         
         const index = products.findIndex(p => p.id === deleteTargetId);
-        if (index === -1) {
-            closeDeleteModal();
-            return;
-        }
+        if (index === -1) { closeDeleteModal(); return; }
         
         const product = products[index];
         products.splice(index, 1);
@@ -2307,16 +2147,10 @@
     }
 
     async function clearAll() {
-        if (products.length === 0) {
-            showToast('📭 Список пуст');
-            return;
-        }
-        if (!confirm('⚠️ ВНИМАНИЕ! Это действие УДАЛИТ ВСЕ товары!\n\nВосстановить данные будет НЕВОЗМОЖНО!\n\nВы уверены, что хотите продолжить?')) {
-            return;
-        }
-        if (!confirm('🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\nВы действительно хотите удалить ВСЕ товары?')) {
-            return;
-        }
+        if (products.length === 0) { showToast('📭 Список пуст'); return; }
+        if (!confirm('⚠️ УДАЛИТЬ ВСЕ товары?')) return;
+        if (!confirm('🔴 Вы уверены?')) return;
+        
         products = [];
         saveToLocal();
         render();
@@ -2329,14 +2163,10 @@
         if (isSyncing) return;
         isSyncing = true;
         
-        if (!GOOGLE_API_KEY || GOOGLE_API_KEY === 'ВАШ_GOOGLE_API_KEY') {
-            showToast('❌ Нет API-ключа. Сначала получите ключ!');
-            isSyncing = false;
-            return;
-        }
-
+        showToast('🔄 Синхронизация...');
         try {
             await loadFromGoogle();
+            // Сохраняем локальные изменения в таблицу
             await clearGoogleSheet();
             for (const product of products) {
                 await addToGoogle(product);
@@ -2357,10 +2187,7 @@
 
     // ===================== ЭКСПОРТ CSV =====================
     function openExportModal() {
-        if (products.length === 0) {
-            showToast('📭 Нет данных для экспорта');
-            return;
-        }
+        if (products.length === 0) { showToast('📭 Нет данных'); return; }
         exportSelectedIds = new Set();
         document.getElementById('exportModal').classList.add('active');
         updateExportModalCounts();
@@ -2388,9 +2215,7 @@
 
     function getFilteredProducts() {
         let filtered = [...products];
-        if (searchQuery) {
-            filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-        }
+        if (searchQuery) filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
         if (currentFilter === 'expiring') {
             filtered = filtered.filter(p => {
                 const days = getDaysLeftFromDate(p.expiry);
@@ -2402,9 +2227,7 @@
                 return days >= 2 && days <= 7;
             });
         }
-        if (currentDepartment !== 'all') {
-            filtered = filtered.filter(p => p.department === currentDepartment);
-        }
+        if (currentDepartment !== 'all') filtered = filtered.filter(p => p.department === currentDepartment);
         return filtered;
     }
 
@@ -2422,7 +2245,7 @@
     function renderExportProductsList() {
         const container = document.getElementById('exportProductsList');
         if (products.length === 0) {
-            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">Нет товаров</div>';
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Нет товаров</div>';
             return;
         }
         let html = '';
@@ -2435,7 +2258,7 @@
                     <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleExportProduct('${p.id}')">
                     <span>${escapeHtml(p.name)}</span>
                     <span class="info">📅 ${formatDateForList(p.expiry)}</span>
-                    <span class="info" style="color: ${status.class};">${getStatusText(days)}</span>
+                    <span class="info" style="color:${status.class};">${getStatusText(days)}</span>
                     ${p.department ? `<span class="info">🏪 ${escapeHtml(p.department)}</span>` : ''}
                 </div>
             `;
@@ -2445,11 +2268,8 @@
     }
 
     function toggleExportProduct(productId) {
-        if (exportSelectedIds.has(productId)) {
-            exportSelectedIds.delete(productId);
-        } else {
-            exportSelectedIds.add(productId);
-        }
+        if (exportSelectedIds.has(productId)) exportSelectedIds.delete(productId);
+        else exportSelectedIds.add(productId);
         renderExportProductsList();
     }
 
@@ -2469,10 +2289,8 @@
 
     function exportSelectedData() {
         const selected = document.querySelector('input[name="exportType"]:checked');
-        if (!selected) {
-            showToast('❌ Выберите тип экспорта');
-            return;
-        }
+        if (!selected) { showToast('❌ Выберите тип экспорта'); return; }
+        
         let dataToExport = [];
         switch(selected.value) {
             case 'all': dataToExport = products; break;
@@ -2486,35 +2304,23 @@
                 return days < 0;
             }); break;
             case 'selected': dataToExport = products.filter(p => exportSelectedIds.has(p.id));
-                if (dataToExport.length === 0) {
-                    showToast('❌ Выберите хотя бы один товар');
-                    return;
-                }
+                if (dataToExport.length === 0) { showToast('❌ Выберите товары'); return; }
                 break;
         }
-        if (dataToExport.length === 0) {
-            showToast('📭 Нет товаров для экспорта');
-            return;
-        }
+        if (dataToExport.length === 0) { showToast('📭 Нет товаров для экспорта'); return; }
+        
         let csv = '\uFEFF';
         csv += 'Название;Штрих-код;Вес/Объём;Отдел;Срок годности;Дней до срока;Статус\n';
         dataToExport.forEach(p => {
             const days = getDaysLeftFromDate(p.expiry);
             const status = getStatus(days);
-            const expiryDisplay = formatDateForList(p.expiry);
             const barcode = p.barcode ? `="${p.barcode}"` : '';
-            csv += `"${p.name}";${barcode};"${p.weight || ''}";"${p.department || ''}";"${expiryDisplay}";${days};"${status.status}"\n`;
+            csv += `"${p.name}";${barcode};"${p.weight || ''}";"${p.department || ''}";"${formatDateForList(p.expiry)}";${days};"${status.status}"\n`;
         });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        const typeNames = {
-            'all': 'все',
-            'filtered': 'отфильтрованные',
-            'expiring': 'истекающие',
-            'expired': 'просроченные',
-            'selected': 'выбранные'
-        };
+        const typeNames = { 'all': 'все', 'filtered': 'отфильтрованные', 'expiring': 'истекающие', 'expired': 'просроченные', 'selected': 'выбранные' };
         link.download = `товары_${typeNames[selected.value]}_${getDateStr(0)}.csv`;
         link.click();
         closeExportModal();
