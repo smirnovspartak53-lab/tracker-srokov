@@ -37,8 +37,9 @@
         .stat-card.green .number { color: #27ae60; }
         .stat-card.blue .number { color: #3498db; }
 
-        .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-        .btn { padding: 12px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.06); color: #1a1a1a; display: flex; align-items: center; justify-content: center; gap: 4px; position: relative; }
+        .actions { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .actions.three { grid-template-columns: 1fr 1fr 1fr; }
+        .btn { padding: 12px 8px; border: none; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.06); color: #1a1a1a; display: flex; align-items: center; justify-content: center; gap: 4px; position: relative; }
         body.dark .btn { background: #2a2a2a; color: #e0e0e0; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         .btn:active { transform: scale(0.96); }
         .btn-primary { background: #667eea; color: white; }
@@ -62,7 +63,6 @@
         .btn-notify .badge { position: absolute; top: -6px; right: -6px; background: #ff6b6b; color: white; border-radius: 50%; padding: 2px 8px; font-size: 10px; font-weight: 700; }
         .btn-edit { background: #3498db; color: white; }
 
-        /* остальные стили без изменений */
         .calculator { background: white; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: none; }
         body.dark .calculator { background: #2a2a2a; }
         .calculator.active { display: block; }
@@ -350,6 +350,7 @@
         <button class="btn btn-primary" onclick="openAddModal()">➕ Добавить</button>
         <button class="btn btn-purple" onclick="openAddToDepartmentModal()">🏷️ В отдел</button>
         <button class="btn btn-remove-dept" onclick="openRemoveFromDepartmentModal()">🚫 Из отдела</button>
+        <button class="btn btn-template" onclick="openTemplateModal()">📋 Шаблон</button>
     </div>
     <div class="actions">
         <button class="btn btn-success" onclick="showAll()">📋 Все</button>
@@ -361,13 +362,12 @@
         </button>
     </div>
     <div class="actions">
-        <button class="btn btn-template" onclick="openTemplateModal()">📋 Шаблон</button>
         <button class="btn btn-google" onclick="syncWithGoogle()">🔄 Синхр.</button>
         <button class="btn btn-calculator" onclick="toggleCalculator()">🧮 Калькулятор</button>
         <button class="btn btn-edit" onclick="openEditByDepartmentModal()">✏️ Редактор</button>
+        <button class="btn btn-export" onclick="openExportModal()">📤 Экспорт CSV</button>
     </div>
     <div class="actions">
-        <button class="btn btn-export" onclick="openExportModal()">📤 Экспорт CSV</button>
         <button class="btn btn-danger" onclick="clearAll()" id="clearBtn">🗑️ Очистить</button>
         <button class="btn btn-theme" onclick="toggleTheme()">🌓 Тема</button>
     </div>
@@ -458,7 +458,7 @@
 
 <div id="pdfContainer"></div>
 
-<!-- Модалки (все как в исходном коде) -->
+<!-- Модалки -->
 <div class="modal-overlay" id="remindersModal">
     <div class="modal">
         <h2>🔔 Умные напоминания</h2>
@@ -844,7 +844,7 @@
 
 <script>
     // ============================================
-    //  КОНФИГУРАЦИЯ (исправлена авторизация)
+    //  КОНФИГУРАЦИЯ
     // ============================================
     const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE';
     const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4';
@@ -1015,25 +1015,25 @@
         document.getElementById('syncText').textContent = text;
     }
 
+    // Загружаем данные из Google, но НЕ перезаписываем локальные, если они есть
     async function loadFromGoogle() {
         try {
             updateSyncStatus('yellow', 'Загрузка...');
             const response = await fetch(SHEET_READ_URL);
             
             if (response.status === 404) {
-                updateSyncStatus('green', 'Таблица пуста, используем локальные');
-                loadFromLocal();
+                updateSyncStatus('green', 'Таблица пуста');
+                if (products.length === 0) loadFromLocal();
                 return;
             }
             
             if (!response.ok) {
                 if (response.status === 401) {
-                    updateSyncStatus('orange', 'Ошибка API (используем локальные)');
-                    showToast('⚠️ Ошибка API Google. Работаем с локальными данными.', 'warning');
+                    updateSyncStatus('orange', 'Ошибка API');
                 } else {
                     throw new Error(`HTTP ${response.status}`);
                 }
-                loadFromLocal();
+                if (products.length === 0) loadFromLocal();
                 return;
             }
 
@@ -1056,30 +1056,89 @@
                     }
                 });
 
-                if (loadedProducts.length > 0) {
+                // Если локальных данных нет или таблица содержит больше записей - загружаем
+                if (loadedProducts.length > 0 && products.length === 0) {
                     products = loadedProducts;
                     saveToLocal();
                     showToast(`✅ Загружено ${products.length} товаров из таблицы`, 'success');
-                } else {
-                    showToast('📭 Таблица пуста', 'warning');
-                    loadFromLocal();
+                } else if (loadedProducts.length > 0 && products.length > 0) {
+                    // Объединяем: добавляем только новые товары из таблицы
+                    let added = 0;
+                    loadedProducts.forEach(p => {
+                        const exists = products.some(lp => 
+                            lp.barcode === p.barcode && 
+                            lp.name === p.name && 
+                            lp.expiry === p.expiry
+                        );
+                        if (!exists) {
+                            products.push(p);
+                            added++;
+                        }
+                    });
+                    if (added > 0) {
+                        saveToLocal();
+                        showToast(`✅ Добавлено ${added} новых товаров из таблицы`, 'success');
+                    }
                 }
                 
                 render();
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
             } else {
                 updateSyncStatus('green', 'Таблица пуста');
-                loadFromLocal();
+                if (products.length === 0) loadFromLocal();
                 render();
             }
         } catch (error) {
             console.error('Ошибка загрузки:', error);
-            updateSyncStatus('orange', 'Ошибка, локальные данные');
-            loadFromLocal();
-            showToast('⚠️ Ошибка синхронизации. Использую локальные данные.', 'danger');
+            updateSyncStatus('orange', 'Ошибка загрузки');
+            if (products.length === 0) loadFromLocal();
+            showToast('⚠️ Ошибка синхронизации. Использую локальные данные.', 'warning');
         }
     }
 
+    // Отправляем ВСЕ товары в Google (полная синхронизация)
+    async function syncAllToGoogle() {
+        try {
+            showToast('🔄 Полная синхронизация...', 'warning');
+            
+            // Очищаем таблицу
+            await fetch(SHEET_CLEAR_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            // Загружаем все товары
+            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
+            const rows = products.map(p => [p.name, p.barcode || '', p.weight || '', p.department || '', p.expiry || '']);
+            const allData = [header, ...rows];
+            
+            if (allData.length > 1) {
+                const response = await fetch(SHEET_APPEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ values: allData })
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        showToast('⚠️ Ошибка авторизации Google', 'warning');
+                        return false;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            }
+            
+            showToast(`✅ Синхронизировано ${products.length} товаров`, 'success');
+            updateSyncStatus('green', `Синхронизировано (${products.length})`);
+            return true;
+        } catch (error) {
+            console.error('Ошибка синхронизации:', error);
+            showToast('⚠️ Ошибка синхронизации', 'danger');
+            return false;
+        }
+    }
+
+    // Добавление одного товара в Google
     async function addToGoogle(product) {
         try {
             const values = [[
@@ -1104,11 +1163,9 @@
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            console.log('✅ Товар добавлен в таблицу');
             return true;
         } catch (error) {
             console.error('Ошибка добавления:', error);
-            showToast('⚠️ Ошибка добавления в таблицу. Товар сохранён локально.', 'warning');
             return false;
         }
     }
@@ -1574,18 +1631,20 @@
         const productIndex = products.findIndex(p => p.id === id);
         if (productIndex === -1) { showToast('❌ Товар не найден'); return; }
 
-        const product = products[productIndex];
-        product.name = name;
-        product.barcode = barcode;
-        product.weight = weight;
-        product.department = department;
-        product.expiry = parsed.raw;
+        products[productIndex].name = name;
+        products[productIndex].barcode = barcode;
+        products[productIndex].weight = weight;
+        products[productIndex].department = department;
+        products[productIndex].expiry = parsed.raw;
 
         saveToLocal();
         render();
         closeEditProductModal();
         showToast(`✅ Товар обновлён`, 'success');
         updateSyncStatus('green', `Обновлено (${products.length})`);
+        
+        // Синхронизируем с Google
+        syncAllToGoogle();
     }
 
     // ===================== ШАБЛОНЫ =====================
@@ -1701,6 +1760,9 @@
         render();
         closeTemplateModal();
         showToast(`✅ Добавлено ${added} товаров по шаблону`, 'success');
+        
+        // Синхронизируем с Google
+        syncAllToGoogle();
     }
 
     function openTemplateModal() {
@@ -1811,6 +1873,9 @@
         document.querySelectorAll('.dept-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelector('.dept-btn-all').classList.add('active');
         currentDepartment = 'all';
+        
+        // Синхронизируем с Google
+        syncAllToGoogle();
     }
 
     // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
@@ -1908,6 +1973,9 @@
         render();
         closeRemoveFromDepartmentModal();
         showToast(`✅ ${removedCount} товаров удалено из отделов`, 'success');
+        
+        // Синхронизируем с Google
+        syncAllToGoogle();
     }
 
     function removeFromDepartment(productId) {
@@ -1919,6 +1987,9 @@
         saveToLocal();
         render();
         showToast(`✅ Товар удалён из отдела "${deptName}"`, 'success');
+        
+        // Синхронизируем с Google
+        syncAllToGoogle();
     }
 
     function clearDepartment() {
@@ -1939,6 +2010,7 @@
             saveToLocal();
             render();
             showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`, 'success');
+            syncAllToGoogle();
         }
     }
 
@@ -2003,13 +2075,12 @@
         showToast('✅ Товар добавлен', 'success');
         showExpiryWarning(newProduct);
         
+        // Добавляем в Google
         addToGoogle(newProduct).then(success => {
             if (success) {
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
-                showToast('✅ Товар сохранён в таблице', 'success');
             } else {
                 updateSyncStatus('orange', 'Ошибка синхронизации');
-                showToast('⚠️ Ошибка сохранения в таблицу', 'warning');
             }
         });
     }
@@ -2026,6 +2097,9 @@
         render();
         showToast('🗑️ Товар удалён', 'warning');
         closeDeleteModal();
+        
+        // Синхронизируем с Google
+        syncAllToGoogle();
     }
 
     function clearAll() {
@@ -2037,6 +2111,9 @@
         saveToLocal();
         render();
         showToast('🗑️ Все товары удалены', 'danger');
+        
+        // Очищаем Google таблицу
+        syncAllToGoogle();
     }
 
     // ===================== СИНХРОНИЗАЦИЯ =====================
@@ -2047,6 +2124,8 @@
         showToast('🔄 Синхронизация...', 'warning');
         try {
             await loadFromGoogle();
+            // После загрузки новых данных синхронизируем локальные с Google
+            await syncAllToGoogle();
             showToast('✅ Синхронизация завершена!', 'success');
         } catch (error) {
             console.error('Ошибка:', error);
