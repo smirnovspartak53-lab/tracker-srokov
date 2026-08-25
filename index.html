@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>📦 Трекер сроков годности</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; padding-bottom: 80px; color: #1a1a1a; transition: background 0.3s, color 0.3s; }
@@ -330,7 +329,7 @@
         </div>
         <div class="sync-status">
             <span class="dot" id="syncDot"></span>
-            <span id="syncText">Синхронизация...</span>
+            <span id="syncText">Загрузка...</span>
         </div>
     </div>
 
@@ -449,7 +448,7 @@
         </div>
     </div>
 
-    <div class="footer">Данные синхронизируются с Google Таблицей</div>
+    <div class="footer">Данные сохраняются локально</div>
 </div>
 
 <div id="pdfContainer"></div>
@@ -848,7 +847,6 @@
 
     const SHEET_READ_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
     const SHEET_APPEND_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
-    const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
 
     let products = [];
     let currentFilter = 'all';
@@ -1025,7 +1023,6 @@
                 googleAvailable = false;
                 googleChecked = true;
                 updateSyncStatus('orange', 'Google недоступен (локальный режим)');
-                if (products.length === 0) loadFromLocal();
                 render();
                 return;
             }
@@ -1049,10 +1046,8 @@
                     }
                 });
 
-                if (loadedProducts.length > 0 && products.length === 0) {
-                    products = loadedProducts;
-                    saveToLocal();
-                } else if (loadedProducts.length > 0 && products.length > 0) {
+                // Объединяем с локальными данными, но не заменяем их
+                if (loadedProducts.length > 0) {
                     let added = 0;
                     loadedProducts.forEach(p => {
                         const exists = products.some(lp => 
@@ -1072,20 +1067,18 @@
                 
                 googleAvailable = true;
                 googleChecked = true;
-                updateSyncStatus('green', `Синхронизировано (${products.length})`);
+                updateSyncStatus('green', `Локально (${products.length})`);
                 render();
             } else {
                 googleAvailable = false;
                 googleChecked = true;
                 updateSyncStatus('orange', 'Google недоступен (локальный режим)');
-                if (products.length === 0) loadFromLocal();
                 render();
             }
         } catch (error) {
             googleAvailable = false;
             googleChecked = true;
             updateSyncStatus('orange', 'Google недоступен (локальный режим)');
-            if (products.length === 0) loadFromLocal();
             render();
         }
     }
@@ -1098,10 +1091,14 @@
         }
 
         try {
-            const clearResponse = await fetch(SHEET_CLEAR_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
+            // Сначала очищаем таблицу
+            const clearResponse = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
             
             if (!clearResponse.ok) {
                 googleAvailable = false;
@@ -1172,8 +1169,13 @@
     function loadFromLocal() {
         const saved = localStorage.getItem('products_tracker_local');
         if (saved) {
-            try { products = JSON.parse(saved); } catch(e) { products = []; }
+            try { 
+                products = JSON.parse(saved); 
+            } catch(e) { 
+                products = []; 
+            }
         } else {
+            // Начальные тестовые данные
             products = [
                 { id: '1', name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка', expiry: getDateStr(2) },
                 { id: '2', name: 'Кетчуп Махеев', barcode: '4604258008505', weight: '350г', department: 'Соусы', expiry: getDateStr(5) },
@@ -2118,12 +2120,18 @@
         
         showToast('🔄 Синхронизация...', 'warning');
         try {
+            // Сначала сохраняем локально
+            saveToLocal();
+            
+            // Пробуем загрузить из Google и объединить
             await loadFromGoogle();
+            
+            // Отправляем все данные в Google
             const result = await syncAllToGoogle();
             if (result) {
                 showToast('✅ Синхронизация завершена!', 'success');
             } else {
-                showToast('⚠️ Синхронизация выполнена локально', 'warning');
+                showToast('⚠️ Данные сохранены локально, Google недоступен', 'warning');
             }
         } catch (error) {
             showToast('⚠️ Ошибка синхронизации, данные сохранены локально', 'warning');
@@ -2327,7 +2335,7 @@
         loadTemplates();
         // Сначала загружаем локальные данные
         loadFromLocal();
-        // Затем пробуем загрузить из Google в фоне
+        // Затем пробуем загрузить из Google в фоне (только для объединения)
         await loadFromGoogle();
         startDateUpdater();
 
