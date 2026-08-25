@@ -38,7 +38,6 @@
         .stat-card.blue .number { color: #3498db; }
 
         .actions { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-        .actions.three { grid-template-columns: 1fr 1fr 1fr; }
         .btn { padding: 12px 8px; border: none; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.06); color: #1a1a1a; display: flex; align-items: center; justify-content: center; gap: 4px; position: relative; }
         body.dark .btn { background: #2a2a2a; color: #e0e0e0; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         .btn:active { transform: scale(0.96); }
@@ -52,11 +51,8 @@
         .btn-purple { background: #8e44ad; color: white; }
         .btn-remove-dept { background: #e67e22; color: white; }
         .btn-calculator { background: #e74c3c; color: white; }
-        .btn-rebuild { background: #2c3e50; color: white; }
         .btn-export { background: #27ae60; color: white; }
         .btn-theme { background: #6c757d; color: white; }
-        .btn-pdf { background: #dc3545; color: white; }
-        .btn-stats { background: #17a2b8; color: white; }
         .btn-template { background: #fd7e14; color: white; }
         .btn-template-add { background: #28a745; color: white; }
         .btn-notify { background: #e74c3c; color: white; }
@@ -862,6 +858,7 @@
     let isSyncing = false;
     let currentTheme = 'light';
     let searchQuery = '';
+    let googleAvailable = true; // Флаг доступности Google
 
     let selectedProductIds = new Set();
     let removeSelectedProductIds = new Set();
@@ -1009,32 +1006,54 @@
         return `${daysLeft} дн.`;
     }
 
-    // ===================== РАБОТА С GOOGLE (ИСПРАВЛЕНА) =====================
+    // ===================== РАБОТА С GOOGLE (С ПОДАВЛЕНИЕМ ОШИБОК) =====================
     function updateSyncStatus(color, text) {
         document.getElementById('syncDot').className = 'dot ' + color;
         document.getElementById('syncText').textContent = text;
     }
 
-    // Загружаем данные из Google, но НЕ перезаписываем локальные, если они есть
+    // Проверка доступности Google
+    async function checkGoogleAvailable() {
+        try {
+            const response = await fetch(SHEET_READ_URL, { method: 'HEAD' });
+            if (response.status === 401 || response.status === 403) {
+                googleAvailable = false;
+                updateSyncStatus('orange', 'Google недоступен (локальный режим)');
+                return false;
+            }
+            googleAvailable = true;
+            return true;
+        } catch (e) {
+            googleAvailable = false;
+            updateSyncStatus('orange', 'Google недоступен (локальный режим)');
+            return false;
+        }
+    }
+
+    // Загружаем данные из Google, но НЕ перезаписываем локальные
     async function loadFromGoogle() {
+        // Проверяем доступность
+        const available = await checkGoogleAvailable();
+        if (!available) {
+            if (products.length === 0) loadFromLocal();
+            render();
+            return;
+        }
+
         try {
             updateSyncStatus('yellow', 'Загрузка...');
             const response = await fetch(SHEET_READ_URL);
             
-            if (response.status === 404) {
-                updateSyncStatus('green', 'Таблица пуста');
+            if (response.status === 404 || response.status === 401 || response.status === 403) {
+                googleAvailable = false;
+                updateSyncStatus('orange', 'Google недоступен (локальный режим)');
                 if (products.length === 0) loadFromLocal();
+                render();
                 return;
             }
             
             if (!response.ok) {
-                if (response.status === 401) {
-                    updateSyncStatus('orange', 'Ошибка API');
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                if (products.length === 0) loadFromLocal();
-                return;
+                throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
@@ -1056,7 +1075,7 @@
                     }
                 });
 
-                // Если локальных данных нет или таблица содержит больше записей - загружаем
+                // Если локальных данных нет - загружаем из таблицы
                 if (loadedProducts.length > 0 && products.length === 0) {
                     products = loadedProducts;
                     saveToLocal();
@@ -1083,29 +1102,42 @@
                 
                 render();
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
+                googleAvailable = true;
             } else {
                 updateSyncStatus('green', 'Таблица пуста');
                 if (products.length === 0) loadFromLocal();
                 render();
             }
         } catch (error) {
-            console.error('Ошибка загрузки:', error);
-            updateSyncStatus('orange', 'Ошибка загрузки');
+            console.warn('Ошибка загрузки из Google:', error.message);
+            googleAvailable = false;
+            updateSyncStatus('orange', 'Google недоступен (локальный режим)');
             if (products.length === 0) loadFromLocal();
-            showToast('⚠️ Ошибка синхронизации. Использую локальные данные.', 'warning');
+            render();
+            // Не показываем toast при ошибке, чтобы не раздражать
         }
     }
 
-    // Отправляем ВСЕ товары в Google (полная синхронизация)
-    async function syncAllToGoogle() {
+    // Отправляем ВСЕ товары в Google (тихо, без ошибок)
+    async function syncAllToGoogle(silent = true) {
+        if (!googleAvailable) {
+            if (!silent) showToast('⚠️ Google недоступен, данные сохранены локально', 'warning');
+            return false;
+        }
+
         try {
-            showToast('🔄 Полная синхронизация...', 'warning');
-            
             // Очищаем таблицу
-            await fetch(SHEET_CLEAR_URL, {
+            const clearResponse = await fetch(SHEET_CLEAR_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
+            
+            if (clearResponse.status === 401 || clearResponse.status === 403) {
+                googleAvailable = false;
+                updateSyncStatus('orange', 'Google недоступен (локальный режим)');
+                if (!silent) showToast('⚠️ Ошибка авторизации Google', 'warning');
+                return false;
+            }
             
             // Загружаем все товары
             const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
@@ -1119,27 +1151,33 @@
                     body: JSON.stringify({ values: allData })
                 });
                 
+                if (response.status === 401 || response.status === 403) {
+                    googleAvailable = false;
+                    updateSyncStatus('orange', 'Google недоступен (локальный режим)');
+                    if (!silent) showToast('⚠️ Ошибка авторизации Google', 'warning');
+                    return false;
+                }
+                
                 if (!response.ok) {
-                    if (response.status === 401) {
-                        showToast('⚠️ Ошибка авторизации Google', 'warning');
-                        return false;
-                    }
                     throw new Error(`HTTP ${response.status}`);
                 }
             }
             
-            showToast(`✅ Синхронизировано ${products.length} товаров`, 'success');
             updateSyncStatus('green', `Синхронизировано (${products.length})`);
+            googleAvailable = true;
             return true;
         } catch (error) {
-            console.error('Ошибка синхронизации:', error);
-            showToast('⚠️ Ошибка синхронизации', 'danger');
+            console.warn('Ошибка синхронизации:', error.message);
+            googleAvailable = false;
+            updateSyncStatus('orange', 'Google недоступен (локальный режим)');
             return false;
         }
     }
 
-    // Добавление одного товара в Google
+    // Добавление одного товара в Google (тихо)
     async function addToGoogle(product) {
+        if (!googleAvailable) return false;
+        
         try {
             const values = [[
                 product.name || '',
@@ -1155,17 +1193,19 @@
                 body: JSON.stringify({ values: values })
             });
 
+            if (response.status === 401 || response.status === 403) {
+                googleAvailable = false;
+                updateSyncStatus('orange', 'Google недоступен (локальный режим)');
+                return false;
+            }
+
             if (!response.ok) {
-                if (response.status === 401) {
-                    showToast('⚠️ Ошибка авторизации Google. Товар сохранён локально.', 'warning');
-                    return false;
-                }
                 throw new Error(`HTTP ${response.status}`);
             }
 
             return true;
         } catch (error) {
-            console.error('Ошибка добавления:', error);
+            console.warn('Ошибка добавления в Google:', error.message);
             return false;
         }
     }
@@ -1643,8 +1683,8 @@
         showToast(`✅ Товар обновлён`, 'success');
         updateSyncStatus('green', `Обновлено (${products.length})`);
         
-        // Синхронизируем с Google
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     // ===================== ШАБЛОНЫ =====================
@@ -1761,8 +1801,8 @@
         closeTemplateModal();
         showToast(`✅ Добавлено ${added} товаров по шаблону`, 'success');
         
-        // Синхронизируем с Google
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     function openTemplateModal() {
@@ -1874,8 +1914,8 @@
         document.querySelector('.dept-btn-all').classList.add('active');
         currentDepartment = 'all';
         
-        // Синхронизируем с Google
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
@@ -1974,8 +2014,8 @@
         closeRemoveFromDepartmentModal();
         showToast(`✅ ${removedCount} товаров удалено из отделов`, 'success');
         
-        // Синхронизируем с Google
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     function removeFromDepartment(productId) {
@@ -1988,8 +2028,8 @@
         render();
         showToast(`✅ Товар удалён из отдела "${deptName}"`, 'success');
         
-        // Синхронизируем с Google
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     function clearDepartment() {
@@ -2010,7 +2050,7 @@
             saveToLocal();
             render();
             showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`, 'success');
-            syncAllToGoogle();
+            syncAllToGoogle(true);
         }
     }
 
@@ -2075,14 +2115,8 @@
         showToast('✅ Товар добавлен', 'success');
         showExpiryWarning(newProduct);
         
-        // Добавляем в Google
-        addToGoogle(newProduct).then(success => {
-            if (success) {
-                updateSyncStatus('green', `Синхронизировано (${products.length})`);
-            } else {
-                updateSyncStatus('orange', 'Ошибка синхронизации');
-            }
-        });
+        // Тихо добавляем в Google
+        addToGoogle(newProduct);
     }
 
     function confirmDelete() {
@@ -2098,8 +2132,8 @@
         showToast('🗑️ Товар удалён', 'warning');
         closeDeleteModal();
         
-        // Синхронизируем с Google
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     function clearAll() {
@@ -2112,8 +2146,8 @@
         render();
         showToast('🗑️ Все товары удалены', 'danger');
         
-        // Очищаем Google таблицу
-        syncAllToGoogle();
+        // Тихо синхронизируем с Google
+        syncAllToGoogle(true);
     }
 
     // ===================== СИНХРОНИЗАЦИЯ =====================
@@ -2124,12 +2158,15 @@
         showToast('🔄 Синхронизация...', 'warning');
         try {
             await loadFromGoogle();
-            // После загрузки новых данных синхронизируем локальные с Google
-            await syncAllToGoogle();
-            showToast('✅ Синхронизация завершена!', 'success');
+            const result = await syncAllToGoogle(false);
+            if (result) {
+                showToast('✅ Синхронизация завершена!', 'success');
+            } else {
+                showToast('⚠️ Синхронизация выполнена локально', 'warning');
+            }
         } catch (error) {
-            console.error('Ошибка:', error);
-            showToast('⚠️ Ошибка синхронизации', 'danger');
+            console.warn('Ошибка синхронизации:', error.message);
+            showToast('⚠️ Ошибка синхронизации, данные сохранены локально', 'warning');
         }
         isSyncing = false;
     }
