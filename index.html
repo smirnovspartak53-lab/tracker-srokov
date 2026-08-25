@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>📦 Трекер сроков годности</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; padding-bottom: 80px; color: #1a1a1a; transition: background 0.3s, color 0.3s; }
@@ -897,14 +896,16 @@
 
 <script>
     // ============================================
-    //  КОНФИГУРАЦИЯ
+    //  КОНФИГУРАЦИЯ — ЗАМЕНИТЕ КЛЮЧ НА СВОЙ!
     // ============================================
-    const GOOGLE_API_KEY = 'AIzaSyB0Zl4pyjQQ7aGBJhMReT60JxMg7VFdXZU;
+    const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE';
     const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4';
     const SHEET_NAME = 'Лист1';
 
+    // URL для работы с Google Sheets (только чтение + добавление)
     const SHEET_READ_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
     const SHEET_APPEND_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
+    const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
 
     let products = [];
     let currentFilter = 'all';
@@ -1074,7 +1075,7 @@
         document.getElementById('syncText').textContent = text;
     }
 
-    // Загрузка данных из Google
+    // ЗАГРУЗКА ДАННЫХ ИЗ GOOGLE
     async function loadFromGoogle() {
         try {
             updateSyncStatus('yellow', 'Загрузка...');
@@ -1082,10 +1083,20 @@
             
             if (response.status === 404) {
                 updateSyncStatus('red', 'Таблица не найдена');
+                loadFromLocal();
                 return;
             }
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    updateSyncStatus('red', 'Ошибка авторизации');
+                    showToast('❌ Ошибка API-ключа. Проверьте ключ в настройках.', 'danger');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                loadFromLocal();
+                return;
+            }
 
             const data = await response.json();
             
@@ -1109,25 +1120,28 @@
                 if (loadedProducts.length > 0) {
                     products = loadedProducts;
                     saveToLocal();
-                    showToast(`✅ Загружено ${products.length} товаров`);
+                    showToast(`✅ Загружено ${products.length} товаров из таблицы`, 'success');
                 } else {
-                    showToast('📭 Таблица пуста');
+                    showToast('📭 Таблица пуста', 'warning');
+                    loadFromLocal();
                 }
                 
                 render();
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
             } else {
                 updateSyncStatus('green', 'Таблица пуста');
+                loadFromLocal();
                 render();
             }
         } catch (error) {
             console.error('Ошибка загрузки:', error);
             updateSyncStatus('red', 'Ошибка загрузки');
-            showToast('⚠️ Ошибка синхронизации');
+            loadFromLocal();
+            showToast('⚠️ Ошибка синхронизации. Использую локальные данные.', 'danger');
         }
     }
 
-    // Добавление товара в Google
+    // ДОБАВЛЕНИЕ ТОВАРА В GOOGLE
     async function addToGoogle(product) {
         try {
             const values = [[
@@ -1144,36 +1158,58 @@
                 body: JSON.stringify({ values: values })
             });
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    showToast('❌ Ошибка авторизации. Проверьте API-ключ.', 'danger');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return false;
+            }
+
+            console.log('✅ Товар добавлен в таблицу');
             return true;
         } catch (error) {
             console.error('Ошибка добавления:', error);
+            showToast('⚠️ Ошибка добавления в таблицу: ' + error.message, 'danger');
             return false;
         }
     }
 
-    // Удаление товара из Google (перезаписываем таблицу)
+    // УДАЛЕНИЕ ТОВАРА ИЗ GOOGLE (перезапись таблицы)
     async function deleteFromGoogle(product) {
         try {
-            // Читаем все данные
+            showToast('🔄 Удаление из таблицы...', 'warning');
+            
+            // 1. Читаем все данные
             const response = await fetch(SHEET_READ_URL);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    showToast('❌ Ошибка авторизации. Проверьте API-ключ.', 'danger');
+                    return false;
+                }
+                throw new Error(`Чтение: HTTP ${response.status}`);
+            }
             const data = await response.json();
             
-            if (!data.values || data.values.length === 0) return false;
+            if (!data.values || data.values.length === 0) {
+                showToast('📭 Таблица пуста', 'warning');
+                return true;
+            }
 
             const header = data.values[0] || ['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности'];
             const rows = data.values.slice(1);
             
-            // Фильтруем удаляемый товар
+            // 2. Фильтруем удаляемый товар
+            const productBarcode = product.barcode || '';
+            const productName = product.name || '';
+            const productExpiry = product.expiry || '';
+            
             const newRows = rows.filter(row => {
                 if (row.length < 1) return true;
                 const rowBarcode = row[1] || '';
                 const rowName = row[0] || '';
                 const rowExpiry = row[4] || '';
-                const productBarcode = product.barcode || '';
-                const productName = product.name || '';
-                const productExpiry = product.expiry || '';
                 
                 // Если есть штрих-код — сравниваем по нему + сроку
                 if (productBarcode && rowBarcode === productBarcode && rowExpiry === productExpiry) return false;
@@ -1182,25 +1218,43 @@
                 return true;
             });
 
-            // Очищаем таблицу
-            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`, {
+            // 3. Очищаем таблицу
+            const clearResponse = await fetch(SHEET_CLEAR_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
+            
+            if (!clearResponse.ok) {
+                if (clearResponse.status === 401) {
+                    showToast('❌ Ошибка авторизации при очистке.', 'danger');
+                    return false;
+                }
+                throw new Error(`Очистка: HTTP ${clearResponse.status}`);
+            }
 
-            // Записываем заново
+            // 4. Добавляем обновлённые данные
             if (newRows.length > 0) {
                 const allData = [header, ...newRows];
-                await fetch(SHEET_APPEND_URL, {
+                const appendResponse = await fetch(SHEET_APPEND_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ values: allData })
                 });
+                
+                if (!appendResponse.ok) {
+                    if (appendResponse.status === 401) {
+                        showToast('❌ Ошибка авторизации при записи.', 'danger');
+                        return false;
+                    }
+                    throw new Error(`Запись: HTTP ${appendResponse.status}`);
+                }
             }
 
+            showToast('✅ Товар удалён из таблицы', 'success');
             return true;
         } catch (error) {
             console.error('Ошибка удаления:', error);
+            showToast('⚠️ Ошибка удаления: ' + error.message, 'danger');
             return false;
         }
     }
@@ -1382,7 +1436,7 @@
             statusInfo.textContent = '🟢 Срок достаточный';
         }
 
-        showToast(`✅ Рассчитано: годен до ${expiryDateStr}`);
+        showToast(`✅ Рассчитано: годен до ${expiryDateStr}`, 'success');
     }
 
     function addCalculatedProduct() {
@@ -1391,7 +1445,7 @@
         document.getElementById('productExpiry').value = calculatedExpiry;
         document.getElementById('productExpiry').style.borderColor = '#27ae60';
         document.getElementById('productExpiry').style.background = '#f0fff0';
-        showToast(`📅 Срок годности: ${calculatedExpiry}`);
+        showToast(`📅 Срок годности: ${calculatedExpiry}`, 'success');
         document.getElementById('calculator').classList.remove('active');
     }
 
@@ -1416,6 +1470,11 @@
             btn.classList.toggle('active', isActive);
         });
         render();
+        if (department === 'all') {
+            showToast('🏪 Показаны все товары');
+        } else {
+            showToast(`🏪 Отдел: ${department}`);
+        }
     }
 
     function filterExpired() { currentFilter = 'expired'; render(); }
@@ -1658,6 +1717,7 @@
         if (productIndex === -1) { showToast('❌ Товар не найден'); return; }
 
         const product = products[productIndex];
+        const oldName = product.name;
         const oldBarcode = product.barcode;
         const oldExpiry = product.expiry;
 
@@ -1670,9 +1730,11 @@
         saveToLocal();
         render();
         closeEditProductModal();
-        showToast(`✅ Товар обновлён`, 'success');
+        showToast(`✅ Товар "${oldName}" обновлён`, 'success');
+        updateSyncStatus('green', `Обновлено (${products.length})`);
         
-        deleteFromGoogle({ name: product.name, barcode: oldBarcode, expiry: oldExpiry }).then(() => {
+        // Обновляем в Google: удаляем старый, добавляем новый
+        deleteFromGoogle({ name: oldName, barcode: oldBarcode, expiry: oldExpiry }).then(() => {
             addToGoogle(product);
         });
     }
@@ -1904,9 +1966,8 @@
         saveToLocal();
         render();
         closeAddToDepartmentModal();
-        showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`);
+        showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`, 'success');
         
-        // Сбрасываем фильтр отделов
         document.querySelectorAll('.dept-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelector('.dept-btn-all').classList.add('active');
         currentDepartment = 'all';
@@ -2012,7 +2073,7 @@
         saveToLocal();
         render();
         closeRemoveFromDepartmentModal();
-        showToast(`✅ ${removedCount} товаров удалено из отделов`);
+        showToast(`✅ ${removedCount} товаров удалено из отделов`, 'success');
     }
 
     async function removeFromDepartment(productId) {
@@ -2023,7 +2084,7 @@
         product.department = '';
         saveToLocal();
         render();
-        showToast(`✅ Товар удалён из отдела "${deptName}"`);
+        showToast(`✅ Товар удалён из отдела "${deptName}"`, 'success');
     }
 
     async function clearDepartment() {
@@ -2040,10 +2101,10 @@
         
         if (count === 0) { showToast(`ℹ️ В отделе "${deptName}" нет товаров`); return; }
         
-        if (confirm(`Удалить все ${count} товаров из отдела "${deptName}"?`)) {
+        if (confirm(`Удалить все ${count} товаров из отдела "${deptName}"?\nТовары останутся в базе.`)) {
             saveToLocal();
             render();
-            showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`);
+            showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`, 'success');
         }
     }
 
@@ -2111,10 +2172,10 @@
         addToGoogle(newProduct).then(success => {
             if (success) {
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
-                showToast('✅ Товар сохранён в таблице');
+                showToast('✅ Товар сохранён в таблице', 'success');
             } else {
                 updateSyncStatus('orange', 'Ошибка синхронизации');
-                showToast('⚠️ Ошибка сохранения в таблицу');
+                showToast('⚠️ Ошибка сохранения в таблицу', 'danger');
             }
         });
     }
@@ -2129,13 +2190,13 @@
         products.splice(index, 1);
         saveToLocal();
         render();
-        showToast('🗑️ Товар удалён');
+        showToast('🗑️ Товар удалён', 'warning');
         closeDeleteModal();
         
         const success = await deleteFromGoogle(product);
         if (success) {
             updateSyncStatus('green', `Синхронизировано (${products.length})`);
-            showToast('✅ Товар удалён из таблицы');
+            showToast('✅ Товар удалён из таблицы', 'success');
         } else {
             updateSyncStatus('orange', 'Ошибка синхронизации');
         }
@@ -2143,13 +2204,25 @@
 
     async function clearAll() {
         if (products.length === 0) { showToast('📭 Список пуст'); return; }
-        if (!confirm('⚠️ УДАЛИТЬ ВСЕ товары?')) return;
-        if (!confirm('🔴 Вы уверены?')) return;
+        if (!confirm('⚠️ ВНИМАНИЕ! Это действие УДАЛИТ ВСЕ товары!\n\nВосстановить данные будет НЕВОЗМОЖНО!\n\nВы уверены, что хотите продолжить?')) return;
+        if (!confirm('🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\nВы действительно хотите удалить ВСЕ товары?')) return;
         
         products = [];
         saveToLocal();
         render();
-        showToast('🗑️ Все товары удалены');
+        showToast('🗑️ Все товары удалены', 'danger');
+        
+        // Очищаем таблицу
+        try {
+            await fetch(SHEET_CLEAR_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            showToast('🗑️ Таблица очищена', 'success');
+        } catch (error) {
+            console.error('Ошибка очистки таблицы:', error);
+            showToast('⚠️ Ошибка очистки таблицы', 'danger');
+        }
     }
 
     // ===================== СИНХРОНИЗАЦИЯ =====================
@@ -2157,16 +2230,14 @@
         if (isSyncing) return;
         isSyncing = true;
         
-        showToast('🔄 Синхронизация...');
+        showToast('🔄 Синхронизация...', 'warning');
         try {
             await loadFromGoogle();
             // Сохраняем все товары в таблицу (перезаписываем)
-            // Сначала очищаем
-            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`, {
+            await fetch(SHEET_CLEAR_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-            // Записываем все товары
             const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
             const rows = products.map(p => [p.name, p.barcode || '', p.weight || '', p.department || '', p.expiry || '']);
             const allData = [header, ...rows];
@@ -2178,16 +2249,16 @@
                 });
             }
             await loadFromGoogle();
-            showToast('✅ Синхронизация завершена!');
+            showToast('✅ Синхронизация завершена!', 'success');
         } catch (error) {
             console.error('Ошибка:', error);
-            showToast('⚠️ Ошибка синхронизации');
+            showToast('⚠️ Ошибка синхронизации', 'danger');
         }
         isSyncing = false;
     }
 
     async function rebuildTable() {
-        showToast('🔄 Перестройка таблицы...');
+        showToast('🔄 Перестройка таблицы...', 'warning');
         await syncWithGoogle();
     }
 
@@ -2330,7 +2401,7 @@
         link.download = `товары_${typeNames[selected.value]}_${getDateStr(0)}.csv`;
         link.click();
         closeExportModal();
-        showToast(`✅ Экспортировано ${dataToExport.length} товаров`);
+        showToast(`✅ Экспортировано ${dataToExport.length} товаров`, 'success');
     }
 
     // ===================== TOAST =====================
