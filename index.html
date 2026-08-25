@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>📦 Трекер сроков годности</title>
     <style>
+        /* ... весь ваш CSS без изменений ... */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; padding-bottom: 80px; color: #1a1a1a; transition: background 0.3s, color 0.3s; }
         body.dark { background: #1a1a1a; color: #e0e0e0; }
@@ -841,13 +842,8 @@
     // ============================================
     //  КОНФИГУРАЦИЯ
     // ============================================
-    const GOOGLE_API_KEY = 'AIzaSyBJCsbxQ11gRoU5yxEksynv3f3343PgQWE';
-    const SPREADSHEET_ID = '1bDYsc9dCJ_Qgs5hAStH5nh3XvZgFyxeXQNrYTx62oU4';
-    const SHEET_NAME = 'Лист1';
-
-    const SHEET_READ_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
-    const SHEET_CLEAR_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:clear?key=${GOOGLE_API_KEY}`;
-    const SHEET_APPEND_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}:append?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
+    // ⚠️ ВАШ URL ОТ APPS SCRIPT
+    const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxWJtYsbSfo1k1IqIiAsE8zjWiRPXe0eA-_7cw4o9FMr7xbZeU6G67pvWRJNvDoEq3gQQ/exec';
 
     let products = [];
     let currentFilter = 'all';
@@ -1010,7 +1006,7 @@
         return `${daysLeft} дн.`;
     }
 
-    // ===================== РАБОТА С GOOGLE =====================
+    // ===================== РАБОТА С GOOGLE (через Apps Script) =====================
     function updateSyncStatus(color, text) {
         const dot = document.getElementById('syncDot');
         const txt = document.getElementById('syncText');
@@ -1018,11 +1014,11 @@
         if (txt) txt.textContent = text;
     }
 
-    // Загружаем данные из Google и ОБЪЕДИНЯЕМ с локальными
+    // Загружаем данные из Google
     async function loadFromGoogle() {
         try {
             updateSyncStatus('yellow', 'Загрузка из Google...');
-            const response = await fetch(SHEET_READ_URL);
+            const response = await fetch(APP_SCRIPT_URL);
             
             if (!response.ok) {
                 googleAvailable = false;
@@ -1032,26 +1028,19 @@
                 return;
             }
 
-            const data = await response.json();
+            const result = await response.json();
             
-            if (data && data.values && data.values.length > 1) {
-                const rows = data.values.slice(1);
-                const loadedProducts = [];
+            if (result.success && result.products && result.products.length > 0) {
+                const loadedProducts = result.products.map(p => ({
+                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                    name: p.name || 'Без названия',
+                    barcode: p.barcode || '',
+                    weight: p.weight || '',
+                    department: p.department || '',
+                    expiry: normalizeDate(p.expiry || getDateStr(7))
+                }));
 
-                rows.forEach(row => {
-                    if (row.length >= 1 && row[0] && row[0].trim()) {
-                        loadedProducts.push({
-                            id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                            name: row[0] || 'Без названия',
-                            barcode: row[1] || '',
-                            weight: row[2] || '',
-                            department: row[3] || '',
-                            expiry: normalizeDate(row[4] || getDateStr(7))
-                        });
-                    }
-                });
-
-                // ОБЪЕДИНЯЕМ: добавляем только те, которых нет в локальном списке
+                // Объединяем с локальными данными (добавляем только новые)
                 const localKeys = new Set(products.map(p => getProductKey(p)));
                 let added = 0;
                 loadedProducts.forEach(p => {
@@ -1085,7 +1074,7 @@
         }
     }
 
-    // ПОЛНАЯ ПЕРЕЗАПИСЬ Google таблицы из данных сайта
+    // Полная синхронизация в Google (перезапись)
     async function syncAllToGoogle() {
         if (products.length === 0) {
             showToast('📭 Нет данных для синхронизации', 'warning');
@@ -1095,42 +1084,32 @@
         try {
             updateSyncStatus('yellow', 'Синхронизация...');
             
-            // Сначала очищаем таблицу
-            const clearResponse = await fetch(SHEET_CLEAR_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            
-            if (!clearResponse.ok) {
-                googleAvailable = false;
-                updateSyncStatus('orange', 'Google недоступен');
-                showToast('⚠️ Не удалось очистить таблицу', 'danger');
-                return false;
-            }
-            
-            // Формируем данные для записи
-            const header = [['Название', 'Штрих-код', 'Вес', 'Отдел', 'Срок годности']];
-            const rows = products.map(p => [p.name, p.barcode || '', p.weight || '', p.department || '', p.expiry || '']);
-            const allData = [header, ...rows];
-            
-            // Записываем все данные за один раз (append)
-            const response = await fetch(SHEET_APPEND_URL, {
+            const response = await fetch(APP_SCRIPT_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ values: allData })
+                body: JSON.stringify({ products: products })
             });
             
             if (!response.ok) {
                 googleAvailable = false;
                 updateSyncStatus('orange', 'Google недоступен');
-                showToast('⚠️ Не удалось записать данные', 'danger');
+                showToast('⚠️ Не удалось синхронизировать', 'danger');
                 return false;
             }
             
-            updateSyncStatus('green', `Синхронизировано (${products.length})`);
-            googleAvailable = true;
-            showToast(`✅ Синхронизация завершена (${products.length} товаров)`, 'success');
-            return true;
+            const result = await response.json();
+            
+            if (result.success) {
+                updateSyncStatus('green', `Синхронизировано (${products.length})`);
+                googleAvailable = true;
+                showToast(`✅ Синхронизация завершена (${products.length} товаров)`, 'success');
+                return true;
+            } else {
+                googleAvailable = false;
+                updateSyncStatus('orange', 'Google недоступен');
+                showToast('⚠️ Ошибка синхронизации', 'danger');
+                return false;
+            }
         } catch (error) {
             googleAvailable = false;
             updateSyncStatus('orange', 'Google недоступен');
@@ -1139,35 +1118,10 @@
         }
     }
 
-    // Добавление одного товара в Google (добавляем в конец)
+    // Добавление одного товара (синхронизируем всю таблицу)
     async function addToGoogle(product) {
         if (!googleAvailable) return false;
-        
-        try {
-            const values = [[
-                product.name || '',
-                product.barcode || '',
-                product.weight || '',
-                product.department || '',
-                product.expiry || ''
-            ]];
-
-            const response = await fetch(SHEET_APPEND_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ values: values })
-            });
-
-            if (!response.ok) {
-                googleAvailable = false;
-                updateSyncStatus('orange', 'Google недоступен');
-                return false;
-            }
-
-            return true;
-        } catch (error) {
-            return false;
-        }
+        return await syncAllToGoogle();
     }
 
     // ===================== ЛОКАЛЬНОЕ ХРАНИЛИЩЕ =====================
@@ -2087,7 +2041,7 @@
         showToast('✅ Товар добавлен', 'success');
         showExpiryWarning(newProduct);
         
-        // Отправляем в Google в фоне
+        // Отправляем в Google
         addToGoogle(newProduct);
     }
 
@@ -2103,7 +2057,6 @@
         showToast('🗑️ Товар удалён', 'warning');
         closeDeleteModal();
         
-        // Полная перезапись Google таблицы
         syncAllToGoogle();
     }
 
@@ -2132,7 +2085,7 @@
             // Загружаем данные из Google и объединяем
             await loadFromGoogle();
             
-            // Полная перезапись Google таблицы данными с сайта
+            // Отправляем все данные в Google
             const result = await syncAllToGoogle();
             if (result) {
                 showToast('✅ Синхронизация завершена!', 'success');
