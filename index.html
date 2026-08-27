@@ -907,9 +907,9 @@
 
 <script>
 // ============================================
-//  КОНФИГУРАЦИЯ - ВАШ НОВЫЙ БЕСПЛАТНЫЙ API
+//  КОНФИГУРАЦИЯ - НОВЫЙ URL
 // ============================================
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwB9YqxBHLnbfeaHdgaF1KoSXnRAopxScjV_xPEwjDpaEqU1wtdkSh517CRm8Jb-TrZNg/exec';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzraqo8y6utAbFtAK94tadD26UBrwYvZcd6T5-4m3o0Twqj2qd6xScfqUjeJaFogPqfpQ/exec';
 
 // ============================================
 //  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -1392,7 +1392,7 @@ let templates = [];
 let editTargetId = null;
 
 // ============================================
-//  🔥 ИСПРАВЛЕННАЯ СИНХРОНИЗАЦИЯ (С РАЗБИВКОЙ НА ЧАСТИ)
+//  🔥 ИСПРАВЛЕННАЯ СИНХРОНИЗАЦИЯ (С РАЗБИВКОЙ И CORS-ПРОКСИ)
 // ============================================
 async function loadFromGoogle() {
     try {
@@ -1400,7 +1400,9 @@ async function loadFromGoogle() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
         
-        const response = await fetch(SHEET_URL, {
+        // 🔥 Используем CORS-прокси для обхода CORS
+        const PROXY_URL = 'https://corsproxy.io/?';
+        const response = await fetch(PROXY_URL + encodeURIComponent(SHEET_URL), {
             signal: controller.signal,
             headers: {
                 'Accept': 'application/json'
@@ -1469,12 +1471,11 @@ async function loadFromGoogle() {
     }
 }
 
-// 🔥 НОВАЯ ФУНКЦИЯ - РАЗБИВАЕТ ДАННЫЕ НА ЧАСТИ ПО 50 ТОВАРОВ
+// 🔥 ФУНКЦИЯ СОХРАНЕНИЯ С РАЗБИВКОЙ И CORS-ПРОКСИ
 async function saveToGoogle() {
     try {
         updateSyncStatus('yellow', 'Сохранение...');
         
-        // Подготавливаем данные
         const allData = products.map(p => ({
             name: safeString(p.name),
             barcode: safeString(p.barcode),
@@ -1488,7 +1489,6 @@ async function saveToGoogle() {
             return true;
         }
         
-        // Разбиваем на части по 50 товаров (чтобы избежать ошибки 413)
         const BATCH_SIZE = 50;
         const batches = [];
         for (let i = 0; i < allData.length; i += BATCH_SIZE) {
@@ -1498,7 +1498,9 @@ async function saveToGoogle() {
         let totalSaved = 0;
         let failedBatches = 0;
         
-        // Отправляем каждую часть
+        // 🔥 Используем CORS-прокси для обхода CORS
+        const PROXY_URL = 'https://corsproxy.io/?';
+        
         for (let i = 0; i < batches.length; i++) {
             const batch = batches[i];
             const batchNum = i + 1;
@@ -1509,7 +1511,7 @@ async function saveToGoogle() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000);
                 
-                const response = await fetch(SHEET_URL, {
+                const response = await fetch(PROXY_URL + encodeURIComponent(SHEET_URL), {
                     method: 'POST',
                     signal: controller.signal,
                     headers: {
@@ -1537,11 +1539,9 @@ async function saveToGoogle() {
                 failedBatches++;
                 console.error(`Ошибка части ${batchNum}:`, batchError);
                 showToast(`⚠️ Ошибка части ${batchNum}, попытка позже...`);
-                // Ждем перед повторной попыткой
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
             
-            // Небольшая задержка между частями
             if (i < batches.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
