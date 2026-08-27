@@ -6,7 +6,6 @@
     <title>📦 Трекер сроков годности</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        /* ===== ВСЕ ВАШИ СТИЛИ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; padding-bottom: 80px; color: #1a1a1a; transition: background 0.3s, color 0.3s; }
         body.dark { background: #1a1a1a; color: #e0e0e0; }
@@ -838,12 +837,12 @@
 
     <script>
         // ============================================
-        //  ИДЕАЛЬНЫЙ СКРИПТ ДЛЯ СИНХРОНИЗАЦИИ
+        //  ПОЛНЫЙ СКРИПТ САЙТА - ИСПРАВЛЕННЫЙ
         // ============================================
         
         // ---------- КОНФИГУРАЦИЯ ----------
-        const SHEET_URL = 'https://api.sheetbest.com/sheets/';
-        const YOUR_SHEET_ID = '3887ff36-d66d-4965-ad6d-3f2b19a3d7ce';
+        const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwBUs62469KD39R8EpTBBztb20drmFsdV1vkCTXL9GTcc4BreIsWGZBXKUCCSj6FQiZ/exec';
+        const YOUR_SHEET_ID = '';
 
         let products = [];
         let currentFilter = 'all';
@@ -932,10 +931,10 @@
         }
 
         function getSheetId() {
-            return localStorage.getItem('google_sheet_id') || YOUR_SHEET_ID;
+            return YOUR_SHEET_ID;
         }
 
-        // ---------- УНИКАЛЬНЫЙ КЛЮЧ ДЛЯ ТОВАРА ----------
+        // ---------- УНИКАЛЬНЫЙ КЛЮЧ ----------
         function getProductKey(product) {
             const name = (product.name || '').trim().toLowerCase();
             const barcode = (product.barcode || '').trim();
@@ -954,6 +953,7 @@
         let toastTimeout;
         function showToast(text, type = '') {
             const toast = document.getElementById('toast');
+            if (!toast) return;
             toast.textContent = text;
             toast.className = 'toast show ' + type;
             clearTimeout(toastTimeout);
@@ -986,31 +986,18 @@
             }
         }
 
-        // ---------- ЗАГРУЗКА ИЗ GOOGLE (ТОЛЬКО НОВЫЕ) ----------
+        // ---------- ЗАГРУЗКА ИЗ GOOGLE ----------
         async function loadFromGoogle() {
-            const sheetId = getSheetId();
-            if (!sheetId) {
-                updateSyncStatus('red', 'Не настроена');
-                return;
-            }
-
             try {
                 updateSyncStatus('yellow', 'Загрузка...');
-                const response = await fetch(`${SHEET_URL}${sheetId}`);
-                
-                if (response.status === 404) {
-                    updateSyncStatus('red', 'Таблица не найдена');
-                    loadFromLocal();
-                    return;
-                }
+                const response = await fetch(SHEET_URL);
                 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const data = await response.json();
                 let addedCount = 0;
-                let skippedCount = 0;
                 
-                // Создаем карту существующих товаров на сайте
+                // Создаем карту существующих товаров
                 const localMap = new Map();
                 products.forEach(p => {
                     const key = getProductKey(p);
@@ -1033,21 +1020,17 @@
                         
                         const key = getProductKey(newProduct);
                         
-                        // Если товара нет на сайте - добавляем
                         if (!localMap.has(key)) {
                             products.push(newProduct);
                             localMap.set(key, newProduct);
                             addedCount++;
                         } else {
-                            // Если товар есть, но у него нет отдела - обновляем
                             const existing = localMap.get(key);
                             if (row.department && !existing.department) {
                                 existing.department = row.department;
-                                skippedCount++;
                             }
                             if (row.weight && !existing.weight) {
                                 existing.weight = row.weight;
-                                skippedCount++;
                             }
                         }
                     }
@@ -1055,10 +1038,6 @@
 
                 if (addedCount > 0) {
                     showToast(`✅ Добавлено ${addedCount} новых товаров из таблицы`);
-                    saveToLocal();
-                }
-                if (skippedCount > 0) {
-                    showToast(`🔄 Обновлено ${skippedCount} товаров (отделы/вес)`);
                     saveToLocal();
                 }
 
@@ -1072,25 +1051,19 @@
             }
         }
 
-        // ---------- СОХРАНЕНИЕ В GOOGLE (ТОЛЬКО НОВЫЕ) ----------
+        // ---------- СОХРАНЕНИЕ В GOOGLE ----------
         async function saveToGoogle() {
-            const sheetId = getSheetId();
-            if (!sheetId) {
-                showToast('❌ ID не настроен');
-                return false;
-            }
-
             try {
                 updateSyncStatus('yellow', 'Сохранение...');
                 
                 // Получаем текущие данные из таблицы
-                const response = await fetch(`${SHEET_URL}${sheetId}`);
+                const response = await fetch(SHEET_URL);
                 let tableData = [];
                 if (response.ok) {
                     tableData = await response.json();
                 }
 
-                // Создаем карту существующих записей в таблице
+                // Создаем карту существующих записей
                 const remoteMap = new Map();
                 tableData.forEach(row => {
                     if (!isEmptyRow(row)) {
@@ -1119,60 +1092,21 @@
                     return true;
                 }
 
-                // Находим пустые строки для заполнения
-                const emptyIndices = [];
-                tableData.forEach((row, index) => {
-                    if (isEmptyRow(row)) {
-                        emptyIndices.push(index);
-                    }
+                // Отправляем новые товары
+                const postResponse = await fetch(SHEET_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newProducts)
                 });
 
-                let added = 0;
-                let emptyIndexUsed = 0;
-
-                // Добавляем новые товары
-                for (const product of newProducts) {
-                    let success = false;
-                    
-                    // Сначала пробуем заполнить пустую строку
-                    if (emptyIndexUsed < emptyIndices.length) {
-                        const emptyIndex = emptyIndices[emptyIndexUsed];
-                        const fillResponse = await fetch(`${SHEET_URL}${sheetId}/${emptyIndex}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(product)
-                        });
-                        if (fillResponse.ok) {
-                            success = true;
-                            emptyIndexUsed++;
-                        }
-                    }
-
-                    // Если не получилось - добавляем в конец
-                    if (!success) {
-                        const postResponse = await fetch(`${SHEET_URL}${sheetId}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(product)
-                        });
-                        if (postResponse.ok) {
-                            success = true;
-                        }
-                    }
-
-                    if (success) {
-                        added++;
-                    }
-                    
-                    // Небольшая задержка
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                if (postResponse.ok) {
+                    const result = await postResponse.json();
+                    showToast(`✅ Добавлено ${newProducts.length} новых товаров в таблицу`);
+                    updateSyncStatus('green', `Сохранено (${products.length})`);
+                    return true;
+                } else {
+                    throw new Error('Ошибка сохранения');
                 }
-
-                if (added > 0) {
-                    showToast(`✅ Добавлено ${added} новых товаров в таблицу`);
-                }
-                updateSyncStatus('green', `Сохранено (${products.length})`);
-                return true;
             } catch (error) {
                 console.error('Ошибка сохранения:', error);
                 updateSyncStatus('red', 'Ошибка сохранения');
@@ -1181,18 +1115,15 @@
             }
         }
 
-        // ---------- ПОЛНАЯ СИНХРОНИЗАЦИЯ ----------
+        // ---------- СИНХРОНИЗАЦИЯ ----------
         async function syncWithGoogle() {
             if (isSyncing) return;
             isSyncing = true;
             updateSyncStatus('yellow', 'Синхронизация...');
             
             try {
-                // 1. Загружаем новые товары из таблицы
                 await loadFromGoogle();
-                // 2. Сохраняем новые товары в таблицу
                 await saveToGoogle();
-                // 3. Еще раз загружаем для обновления
                 await loadFromGoogle();
                 showToast('✅ Полная синхронизация завершена!');
             } catch (error) {
@@ -1204,7 +1135,7 @@
             isSyncing = false;
         }
 
-        // ---------- ПЕРЕСТРОЙКА ТАБЛИЦЫ ----------
+        // ---------- ПЕРЕСТРОЙКА ----------
         async function rebuildTable() {
             if (products.length === 0) {
                 showToast('📭 Нет товаров для перестройки');
@@ -1215,18 +1146,12 @@
                 return;
             }
             
-            const sheetId = getSheetId();
-            if (!sheetId) {
-                showToast('❌ ID не настроен');
-                return;
-            }
-            
             try {
                 showToast('🔄 Перестройка таблицы...');
                 updateSyncStatus('yellow', 'Перестройка...');
                 
                 // Очищаем таблицу
-                await fetch(`${SHEET_URL}${sheetId}`, { method: 'DELETE' });
+                await fetch(SHEET_URL, { method: 'DELETE' });
                 
                 // Сохраняем все товары заново
                 const dataToSend = products.map(p => ({
@@ -1237,25 +1162,19 @@
                     expiry: p.expiry || ''
                 }));
                 
-                // Отправляем пакетами по 50
-                const batchSize = 50;
-                let sent = 0;
-                for (let i = 0; i < dataToSend.length; i += batchSize) {
-                    const batch = dataToSend.slice(i, i + batchSize);
-                    const response = await fetch(`${SHEET_URL}${sheetId}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(batch)
-                    });
-                    if (response.ok) {
-                        sent += batch.length;
-                        showToast(`📤 Отправлено ${sent}/${dataToSend.length}`);
-                    }
+                const postResponse = await fetch(SHEET_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dataToSend)
+                });
+
+                if (postResponse.ok) {
+                    showToast(`✅ Таблица перестроена (${products.length} товаров)`);
+                    await loadFromGoogle();
+                    updateSyncStatus('green', 'Перестроено');
+                } else {
+                    throw new Error('Ошибка перестройки');
                 }
-                
-                showToast(`✅ Таблица перестроена (${products.length} товаров)`);
-                await loadFromGoogle();
-                updateSyncStatus('green', 'Перестроено');
             } catch (error) {
                 console.error('Ошибка перестройки:', error);
                 showToast('⚠️ Ошибка перестройки таблицы');
@@ -1265,11 +1184,8 @@
 
         // ---------- УДАЛЕНИЕ ИЗ GOOGLE ----------
         async function deleteFromGoogle(product) {
-            const sheetId = getSheetId();
-            if (!sheetId) return false;
-
             try {
-                const response = await fetch(`${SHEET_URL}${sheetId}`);
+                const response = await fetch(SHEET_URL);
                 if (!response.ok) return false;
                 
                 const tableData = await response.json();
@@ -1287,58 +1203,13 @@
                 
                 if (indexToDelete === -1) return false;
                 
-                const deleteResponse = await fetch(`${SHEET_URL}${sheetId}/${indexToDelete}`, {
+                const deleteResponse = await fetch(`${SHEET_URL}?index=${indexToDelete}`, {
                     method: 'DELETE'
                 });
                 
                 return deleteResponse.ok;
             } catch (error) {
                 console.error('Ошибка удаления из таблицы:', error);
-                return false;
-            }
-        }
-
-        // ---------- ОБНОВЛЕНИЕ ОТДЕЛА В GOOGLE ----------
-        async function updateDepartmentInGoogle(productData) {
-            const sheetId = getSheetId();
-            if (!sheetId) return false;
-
-            try {
-                const response = await fetch(`${SHEET_URL}${sheetId}`);
-                if (!response.ok) return false;
-                
-                const tableData = await response.json();
-                const key = getProductKey(productData);
-                
-                let indexToUpdate = -1;
-                for (let i = 0; i < tableData.length; i++) {
-                    const row = tableData[i];
-                    const rowKey = getProductKey(row);
-                    if (rowKey === key) {
-                        indexToUpdate = i;
-                        break;
-                    }
-                }
-                
-                if (indexToUpdate === -1) return false;
-                
-                const updateData = {
-                    name: productData.name,
-                    barcode: productData.barcode,
-                    weight: tableData[indexToUpdate].weight || '',
-                    department: productData.department || '',
-                    expiry: productData.expiry
-                };
-                
-                const updateResponse = await fetch(`${SHEET_URL}${sheetId}/${indexToUpdate}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updateData)
-                });
-                
-                return updateResponse.ok;
-            } catch (error) {
-                console.error('Ошибка обновления отдела:', error);
                 return false;
             }
         }
@@ -1591,7 +1462,6 @@
                 }
             }
 
-            const oldProduct = { ...product };
             product.name = name;
             product.barcode = barcode;
             product.weight = weight;
@@ -1602,9 +1472,6 @@
             render();
             closeEditProductModal();
             showToast(`✅ Товар обновлён`, 'success');
-            
-            // Обновляем в таблице
-            updateDepartmentInGoogle(product);
             syncWithGoogle();
         }
 
@@ -1843,34 +1710,17 @@
             }
             
             let addedCount = 0;
-            const productsToUpdate = [];
-            
-            products.forEach(p => {
-                if (selectedProductIds.has(p.id)) {
-                    productsToUpdate.push({
-                        name: p.name,
-                        barcode: p.barcode,
-                        expiry: p.expiry,
-                        department: department
-                    });
-                    addedCount++;
-                }
-            });
             
             products.forEach(p => {
                 if (selectedProductIds.has(p.id)) {
                     p.department = department;
+                    addedCount++;
                 }
             });
             saveToLocal();
             render();
             closeAddToDepartmentModal();
             showToast(`✅ ${addedCount} товаров добавлено в отдел "${department}"`);
-            
-            for (const productData of productsToUpdate) {
-                await updateDepartmentInGoogle(productData);
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
             
             document.querySelectorAll('.dept-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -1991,16 +1841,10 @@
             }
             
             let removedCount = 0;
-            const productsToUpdate = [];
             
             products.forEach(p => {
                 if (removeSelectedProductIds.has(p.id) && p.department) {
-                    productsToUpdate.push({
-                        name: p.name,
-                        barcode: p.barcode,
-                        expiry: p.expiry,
-                        department: ''
-                    });
+                    p.department = '';
                     removedCount++;
                 }
             });
@@ -2010,20 +1854,10 @@
                 return;
             }
             
-            products.forEach(p => {
-                if (removeSelectedProductIds.has(p.id)) {
-                    p.department = '';
-                }
-            });
             saveToLocal();
             render();
             closeRemoveFromDepartmentModal();
             showToast(`✅ ${removedCount} товаров удалено из отделов`);
-            
-            for (const productData of productsToUpdate) {
-                await updateDepartmentInGoogle(productData);
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
             syncWithGoogle();
         }
 
@@ -2035,20 +1869,10 @@
             }
             
             const deptName = product.department;
-            
-            const productData = {
-                name: product.name,
-                barcode: product.barcode,
-                expiry: product.expiry,
-                department: ''
-            };
-            
             product.department = '';
             saveToLocal();
             render();
             showToast(`✅ Товар удалён из отдела "${deptName}"`);
-            
-            updateDepartmentInGoogle(productData);
             syncWithGoogle();
         }
 
@@ -2059,17 +1883,11 @@
             }
             
             const deptName = currentDepartment;
-            const productsToUpdate = [];
             let count = 0;
             
             products.forEach(p => {
                 if (p.department === deptName) {
-                    productsToUpdate.push({
-                        name: p.name,
-                        barcode: p.barcode,
-                        expiry: p.expiry,
-                        department: ''
-                    });
+                    p.department = '';
                     count++;
                 }
             });
@@ -2080,19 +1898,9 @@
             }
             
             if (confirm(`Удалить все ${count} товаров из отдела "${deptName}"?\nТовары останутся в базе.`)) {
-                products.forEach(p => {
-                    if (p.department === deptName) {
-                        p.department = '';
-                    }
-                });
                 saveToLocal();
                 render();
                 showToast(`✅ ${count} товаров удалено из отдела "${deptName}"`);
-                
-                for (const productData of productsToUpdate) {
-                    updateDepartmentInGoogle(productData);
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                }
                 syncWithGoogle();
             }
         }
@@ -2307,15 +2115,12 @@
             render();
             showToast('🗑️ Все товары удалены с сайта');
             
-            const sheetId = getSheetId();
-            if (sheetId) {
-                try {
-                    await fetch(`${SHEET_URL}${sheetId}`, { method: 'DELETE' });
-                    showToast('🗑️ Таблица очищена');
-                } catch (error) {
-                    console.error('Ошибка очистки таблицы:', error);
-                    showToast('⚠️ Ошибка очистки таблицы');
-                }
+            try {
+                await fetch(SHEET_URL, { method: 'DELETE' });
+                showToast('🗑️ Таблица очищена');
+            } catch (error) {
+                console.error('Ошибка очистки таблицы:', error);
+                showToast('⚠️ Ошибка очистки таблицы');
             }
         }
 
@@ -2551,7 +2356,7 @@
 
             checkReminders();
 
-            if (document.getElementById('exportModal').classList.contains('active')) {
+            if (document.getElementById('exportModal') && document.getElementById('exportModal').classList.contains('active')) {
                 updateExportModalCounts();
             }
 
@@ -2624,24 +2429,7 @@
         function init() {
             loadTheme();
             loadTemplates();
-            
-            // Проверяем наличие элементов перед использованием
-            const sheetId = getSheetId();
-            if (sheetId) {
-                loadFromGoogle();
-            } else {
-                loadFromLocal();
-            }
-            
-            // Автообновление каждую минуту
-            setInterval(render, 60000);
-            
-            // Автосинхронизация каждые 30 секунд
-            setInterval(() => {
-                if (getSheetId() && !isSyncing) {
-                    loadFromGoogle();
-                }
-            }, 30000);
+            loadFromLocal();
             
             setTimeout(() => {
                 const reminders = checkReminders();
@@ -2654,6 +2442,13 @@
                     }
                 }
             }, 1000);
+
+            // Автосинхронизация каждые 30 секунд
+            setInterval(() => {
+                if (!isSyncing) {
+                    loadFromGoogle();
+                }
+            }, 30000);
         }
 
         // Запускаем при загрузке
