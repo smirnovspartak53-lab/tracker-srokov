@@ -306,41 +306,41 @@
         </div>
 
         <div class="stats">
-            <div class="stat-card blue" onclick="showAll()"><div class="number" id="totalCount">0</div><div class="label">Всего</div></div>
-            <div class="stat-card red" onclick="filterExpired()"><div class="number" id="expiredCount">0</div><div class="label">Просрочено</div></div>
-            <div class="stat-card orange" onclick="filterWeek()"><div class="number" id="weekCount">0</div><div class="label">2-7 дней</div></div>
-            <div class="stat-card yellow" onclick="filterExpiring()"><div class="number" id="expiringCount">0</div><div class="label">0-1 день</div></div>
-            <div class="stat-card green" onclick="filterOk()"><div class="number" id="okCount">0</div><div class="label">В порядке</div></div>
+            <div class="stat-card blue" onclick="window.showAll()"><div class="number" id="totalCount">0</div><div class="label">Всего</div></div>
+            <div class="stat-card red" onclick="window.filterExpired()"><div class="number" id="expiredCount">0</div><div class="label">Просрочено</div></div>
+            <div class="stat-card orange" onclick="window.filterWeek()"><div class="number" id="weekCount">0</div><div class="label">2-7 дней</div></div>
+            <div class="stat-card yellow" onclick="window.filterExpiring()"><div class="number" id="expiringCount">0</div><div class="label">0-1 день</div></div>
+            <div class="stat-card green" onclick="window.filterOk()"><div class="number" id="okCount">0</div><div class="label">В порядке</div></div>
         </div>
 
         <div class="actions actions-4">
-            <button class="btn btn-primary" onclick="openAddModal()">➕ Добавить</button>
-            <button class="btn btn-purple" onclick="openAddToDepartmentModal()">🏷️ В отдел</button>
-            <button class="btn btn-remove-dept" onclick="openRemoveFromDepartmentModal()">🚫 Из отдела</button>
-            <button class="btn btn-template" onclick="openTemplateModal()">📋 Шаблон</button>
+            <button class="btn btn-primary" onclick="window.openAddModal()">➕ Добавить</button>
+            <button class="btn btn-purple" onclick="window.openAddToDepartmentModal()">🏷️ В отдел</button>
+            <button class="btn btn-remove-dept" onclick="window.openRemoveFromDepartmentModal()">🚫 Из отдела</button>
+            <button class="btn btn-template" onclick="window.openTemplateModal()">📋 Шаблон</button>
         </div>
 
         <div class="actions actions-4 mt-n8">
-            <button class="btn btn-success" onclick="showAll()">📋 Все</button>
-            <button class="btn btn-orange" onclick="filterWeek()">🟠 2-7 дней</button>
-            <button class="btn btn-warning" onclick="filterExpiring()">🔔 0-1 день</button>
-            <button class="btn btn-notify" onclick="showReminders()" id="notifyBtn">
+            <button class="btn btn-success" onclick="window.showAll()">📋 Все</button>
+            <button class="btn btn-orange" onclick="window.filterWeek()">🟠 2-7 дней</button>
+            <button class="btn btn-warning" onclick="window.filterExpiring()">🔔 0-1 день</button>
+            <button class="btn btn-notify" onclick="window.showReminders()" id="notifyBtn">
                 🔔 Напоминания
                 <span class="badge" id="notifyBadge" style="display:none;">0</span>
             </button>
         </div>
 
         <div class="actions actions-4 mt-n8">
-            <button class="btn btn-rebuild" onclick="rebuildTable()">🔨 Перестроить</button>
-            <button class="btn btn-google" onclick="syncWithGoogle()">🔄 Синхр.</button>
-            <button class="btn btn-calculator" onclick="toggleCalculator()">🧮 Калькулятор</button>
-            <button class="btn btn-edit" onclick="openEditByDepartmentModal()">✏️ Редактор</button>
+            <button class="btn btn-rebuild" onclick="window.rebuildTable()">🔨 Перестроить</button>
+            <button class="btn btn-google" onclick="window.syncWithGoogle()">🔄 Синхр.</button>
+            <button class="btn btn-calculator" onclick="window.toggleCalculator()">🧮 Калькулятор</button>
+            <button class="btn btn-edit" onclick="window.openEditByDepartmentModal()">✏️ Редактор</button>
         </div>
 
         <div class="actions" style="grid-template-columns: 1fr 1fr 1fr; margin-top: -8px;">
-            <button class="btn btn-export" onclick="openExportModal()">📤 Экспорт CSV</button>
-            <button class="btn btn-danger" onclick="clearAll()" id="clearBtn">🗑️ Очистить</button>
-            <button class="btn btn-theme" onclick="toggleTheme()">🌓 Тема</button>
+            <button class="btn btn-export" onclick="window.openExportModal()">📤 Экспорт CSV</button>
+            <button class="btn btn-danger" onclick="window.clearAll()" id="clearBtn">🗑️ Очистить</button>
+            <button class="btn btn-theme" onclick="window.toggleTheme()">🌓 Тема</button>
         </div>
 
         <div class="calculator" id="calculator">
@@ -360,53 +360,53 @@
                     </select>
                 </div>
             </div>
-            <button class="btn btn-primary btn-full" onclick="calculateExpiry()">📊 Рассчитать</button>
+            <button class="btn btn-primary btn-full" onclick="window.calculateExpiry()">📊 Рассчитать</button>
             <div class="result" id="calculatorResult" style="display: none;">
                 <div style="font-size: 14px; color: #888; margin-bottom: 4px;">📅 Годен до:</div>
                 <div class="date" id="expiryDate">—</div>
                 <div class="days" id="daysLeft">—</div>
                 <div class="info" id="statusInfo">—</div>
                 <div style="margin-top: 12px;">
-                    <button class="btn btn-success" onclick="addCalculatedProduct()" style="width: 100%;">➕ Добавить товар с этим сроком</button>
+                    <button class="btn btn-success" onclick="window.addCalculatedProduct()" style="width: 100%;">➕ Добавить товар с этим сроком</button>
                 </div>
             </div>
         </div>
 
         <div class="search-controls">
-            <input type="text" class="search-input" id="productSearchInput" placeholder="🔍 Поиск товара по названию..." oninput="onSearchInput()">
-            <button class="search-clear" onclick="clearSearch()">✕ Очистить</button>
+            <input type="text" class="search-input" id="productSearchInput" placeholder="🔍 Поиск товара по названию..." oninput="window.onSearchInput()">
+            <button class="search-clear" onclick="window.clearSearch()">✕ Очистить</button>
         </div>
 
         <div class="department-controls" id="departmentControls">
-            <button class="dept-btn dept-btn-all active" onclick="filterDepartment('all')">🏪 Все</button>
-            <button class="dept-btn" onclick="filterDepartment('Соусы')">🥫 Соусы</button>
-            <button class="dept-btn" onclick="filterDepartment('Консервы')">🥫 Консервы</button>
-            <button class="dept-btn" onclick="filterDepartment('Масла')">🫒 Масла</button>
-            <button class="dept-btn" onclick="filterDepartment('Специи')">🌿 Специи</button>
-            <button class="dept-btn" onclick="filterDepartment('Напитки')">🥤 Напитки</button>
-            <button class="dept-btn" onclick="filterDepartment('Сладости')">🍬 Сладости</button>
-            <button class="dept-btn" onclick="filterDepartment('Заморозка')">❄️ Заморозка</button>
-            <button class="dept-btn" onclick="filterDepartment('Молочка')">🥛 Молочка</button>
-            <button class="dept-btn" onclick="filterDepartment('Снеки')">🍿 Снеки</button>
-            <button class="dept-btn" onclick="filterDepartment('Завтраки')">🥣 Завтраки</button>
-            <button class="dept-btn" onclick="filterDepartment('Диетическое')">🥗 Диетическое</button>
-            <button class="dept-btn" onclick="filterDepartment('Мясо')">🥩 Мясо</button>
-            <button class="dept-btn" onclick="filterDepartment('Рыба')">🐟 Рыба</button>
-            <button class="dept-btn" onclick="filterDepartment('Бакалея')">📦 Бакалея</button>
-            <button class="dept-btn" onclick="filterDepartment('Алко напитки')">🍺 Алко напитки</button>
-            <button class="dept-btn" onclick="filterDepartment('Для дома и животных')">🏠🐾 Для дома и животных</button>
-            <button class="dept-btn" onclick="filterDepartment('Пресервы')">🐟 Пресервы</button>
-            <button class="dept-btn" onclick="filterDepartment('Кондитерский')">🍰 Кондитерский</button>
-            <button class="dept-btn" onclick="filterDepartment('Другое')">📦 Другое</button>
-            <button class="dept-btn dept-btn-clear" onclick="clearDepartment()" title="Очистить отдел">🧹 Очистить</button>
+            <button class="dept-btn dept-btn-all active" onclick="window.filterDepartment('all')">🏪 Все</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Соусы')">🥫 Соусы</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Консервы')">🥫 Консервы</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Масла')">🫒 Масла</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Специи')">🌿 Специи</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Напитки')">🥤 Напитки</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Сладости')">🍬 Сладости</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Заморозка')">❄️ Заморозка</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Молочка')">🥛 Молочка</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Снеки')">🍿 Снеки</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Завтраки')">🥣 Завтраки</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Диетическое')">🥗 Диетическое</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Мясо')">🥩 Мясо</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Рыба')">🐟 Рыба</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Бакалея')">📦 Бакалея</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Алко напитки')">🍺 Алко напитки</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Для дома и животных')">🏠🐾 Для дома и животных</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Пресервы')">🐟 Пресервы</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Кондитерский')">🍰 Кондитерский</button>
+            <button class="dept-btn" onclick="window.filterDepartment('Другое')">📦 Другое</button>
+            <button class="dept-btn dept-btn-clear" onclick="window.clearDepartment()" title="Очистить отдел">🧹 Очистить</button>
         </div>
 
         <div class="sort-controls">
-            <button class="sort-btn active" data-sort="default" onclick="setSort('default')">📅 По сроку</button>
-            <button class="sort-btn" data-sort="name" onclick="setSort('name')">📝 По названию</button>
-            <button class="sort-btn" data-sort="expiry" onclick="setSort('expiry')">📅 По дате</button>
-            <button class="sort-btn" data-sort="barcode" onclick="setSort('barcode')">🔢 По штрих-коду</button>
-            <button class="sort-btn" data-sort="department" onclick="setSort('department')">🏪 По отделу</button>
+            <button class="sort-btn active" data-sort="default" onclick="window.setSort('default')">📅 По сроку</button>
+            <button class="sort-btn" data-sort="name" onclick="window.setSort('name')">📝 По названию</button>
+            <button class="sort-btn" data-sort="expiry" onclick="window.setSort('expiry')">📅 По дате</button>
+            <button class="sort-btn" data-sort="barcode" onclick="window.setSort('barcode')">🔢 По штрих-коду</button>
+            <button class="sort-btn" data-sort="department" onclick="window.setSort('department')">🏪 По отделу</button>
         </div>
 
         <div class="legend">
@@ -435,7 +435,7 @@
             <h2>🔔 Умные напоминания</h2>
             <div id="remindersList"><div style="text-align:center;color:#999;padding:20px;">Загрузка...</div></div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeRemindersModal()">Закрыть</button>
+                <button class="btn btn-close-modal" onclick="window.closeRemindersModal()">Закрыть</button>
             </div>
         </div>
     </div>
@@ -445,11 +445,11 @@
             <h2>✏️ Редактор товаров</h2>
             <div class="form-group">
                 <label>🔍 Поиск по названию</label>
-                <input type="text" id="editSearchInput" class="search-box" placeholder="Введите название товара..." oninput="renderEditProducts()">
+                <input type="text" id="editSearchInput" class="search-box" placeholder="Введите название товара..." oninput="window.renderEditProducts()">
             </div>
             <div class="form-group">
                 <label>🏪 Фильтр по отделу</label>
-                <select id="editDepartmentSelect" onchange="renderEditProducts()">
+                <select id="editDepartmentSelect" onchange="window.renderEditProducts()">
                     <option value="">Все отделы</option>
                     <option value="Соусы">🥫 Соусы</option>
                     <option value="Консервы">🥫 Консервы</option>
@@ -476,7 +476,7 @@
                 <div style="padding: 20px; text-align: center; color: #999;">Введите название для поиска</div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeEditByDepartmentModal()">Закрыть</button>
+                <button class="btn btn-close-modal" onclick="window.closeEditByDepartmentModal()">Закрыть</button>
             </div>
         </div>
     </div>
@@ -533,8 +533,8 @@
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeEditProductModal()">Отмена</button>
-                <button class="btn btn-primary" onclick="saveEditProduct()">💾 Сохранить</button>
+                <button class="btn btn-close-modal" onclick="window.closeEditProductModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="window.saveEditProduct()">💾 Сохранить</button>
             </div>
         </div>
     </div>
@@ -586,8 +586,8 @@
                 <div style="font-size: 11px; color: #888; margin-top: 4px;">💡 Используйте <b>калькулятор</b> для расчета даты</div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeAddModal()">Отмена</button>
-                <button class="btn btn-primary" onclick="addProduct()">Сохранить</button>
+                <button class="btn btn-close-modal" onclick="window.closeAddModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="window.addProduct()">Сохранить</button>
             </div>
         </div>
     </div>
@@ -626,11 +626,11 @@
                         <option value="Другое">📦 Другое</option>
                     </select>
                 </div>
-                <button class="btn btn-template-add" onclick="addTemplateItem()" style="margin-top:8px; width:100%;">➕ Добавить в шаблоны</button>
+                <button class="btn btn-template-add" onclick="window.addTemplateItem()" style="margin-top:8px; width:100%;">➕ Добавить в шаблоны</button>
             </div>
             <div class="form-group">
                 <label>🏪 Фильтр по отделу</label>
-                <select id="templateFilterDept" onchange="renderTemplateList()">
+                <select id="templateFilterDept" onchange="window.renderTemplateList()">
                     <option value="all">Все отделы</option>
                     <option value="Соусы">🥫 Соусы</option>
                     <option value="Консервы">🥫 Консервы</option>
@@ -664,8 +664,8 @@
                 <input type="text" id="templateExpiry" placeholder="Например: 25.07.2026">
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeTemplateModal()">Отмена</button>
-                <button class="btn btn-template" onclick="addTemplateProducts()">📋 Добавить выбранные</button>
+                <button class="btn btn-close-modal" onclick="window.closeTemplateModal()">Отмена</button>
+                <button class="btn btn-template" onclick="window.addTemplateProducts()">📋 Добавить выбранные</button>
             </div>
         </div>
     </div>
@@ -687,7 +687,7 @@
             <div style="margin-top: 8px; font-weight:600; font-size:14px;">📊 По отделам:</div>
             <div class="stats-dept-list" id="statsDepartmentsList"></div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeStatsModal()">Закрыть</button>
+                <button class="btn btn-close-modal" onclick="window.closeStatsModal()">Закрыть</button>
             </div>
         </div>
     </div>
@@ -722,13 +722,13 @@
             </div>
             <div class="form-group">
                 <label>🔍 Поиск товара</label>
-                <input type="text" id="addSearchInput" class="search-box" placeholder="Введите название или штрих-код..." oninput="filterAddProducts()">
+                <input type="text" id="addSearchInput" class="search-box" placeholder="Введите название или штрих-код..." oninput="window.filterAddProducts()">
             </div>
             <div class="form-group">
                 <label>Выберите товары для добавления в отдел</label>
                 <div class="select-actions">
-                    <button class="btn btn-primary" onclick="selectAllProducts()" style="flex:1;">✅ Выбрать все</button>
-                    <button class="btn btn-close-modal" onclick="deselectAllProducts()" style="flex:1;">❌ Снять все</button>
+                    <button class="btn btn-primary" onclick="window.selectAllProducts()" style="flex:1;">✅ Выбрать все</button>
+                    <button class="btn btn-close-modal" onclick="window.deselectAllProducts()" style="flex:1;">❌ Снять все</button>
                 </div>
                 <div id="productSelectList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
                     <div style="padding: 20px; text-align: center; color: #999;">Загрузка товаров...</div>
@@ -736,8 +736,8 @@
                 <div class="selected-count" id="selectedCount">Выбрано: 0 товаров</div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeAddToDepartmentModal()">Отмена</button>
-                <button class="btn btn-purple" onclick="addSelectedToDepartment()">🏷️ Добавить в отдел</button>
+                <button class="btn btn-close-modal" onclick="window.closeAddToDepartmentModal()">Отмена</button>
+                <button class="btn btn-purple" onclick="window.addSelectedToDepartment()">🏷️ Добавить в отдел</button>
             </div>
         </div>
     </div>
@@ -773,13 +773,13 @@
             </div>
             <div class="form-group">
                 <label>🔍 Поиск товара</label>
-                <input type="text" id="removeSearchInput" class="search-box" placeholder="Введите название или штрих-код..." oninput="filterRemoveProducts()">
+                <input type="text" id="removeSearchInput" class="search-box" placeholder="Введите название или штрих-код..." oninput="window.filterRemoveProducts()">
             </div>
             <div class="form-group">
                 <label>Выберите товары для удаления из отдела</label>
                 <div class="select-actions">
-                    <button class="btn btn-primary" onclick="selectAllRemoveProducts()" style="flex:1;">✅ Выбрать все</button>
-                    <button class="btn btn-close-modal" onclick="deselectAllRemoveProducts()" style="flex:1;">❌ Снять все</button>
+                    <button class="btn btn-primary" onclick="window.selectAllRemoveProducts()" style="flex:1;">✅ Выбрать все</button>
+                    <button class="btn btn-close-modal" onclick="window.deselectAllRemoveProducts()" style="flex:1;">❌ Снять все</button>
                 </div>
                 <div id="removeProductSelectList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
                     <div style="padding: 20px; text-align: center; color: #999;">Загрузка товаров...</div>
@@ -787,8 +787,8 @@
                 <div class="selected-count" id="removeSelectedCount">Выбрано: 0 товаров</div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeRemoveFromDepartmentModal()">Отмена</button>
-                <button class="btn btn-remove-dept" onclick="removeSelectedFromDepartment()">🚫 Удалить из отдела</button>
+                <button class="btn btn-close-modal" onclick="window.closeRemoveFromDepartmentModal()">Отмена</button>
+                <button class="btn btn-remove-dept" onclick="window.removeSelectedFromDepartment()">🚫 Удалить из отдела</button>
             </div>
         </div>
     </div>
@@ -798,8 +798,8 @@
             <h2>🗑️ Удалить товар?</h2>
             <p style="text-align: center; margin-bottom: 20px; color: #666;" id="deleteConfirmText"></p>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeDeleteModal()">Отмена</button>
-                <button class="btn btn-danger" onclick="confirmDelete()">Удалить</button>
+                <button class="btn btn-close-modal" onclick="window.closeDeleteModal()">Отмена</button>
+                <button class="btn btn-danger" onclick="window.confirmDelete()">Удалить</button>
             </div>
         </div>
     </div>
@@ -810,25 +810,25 @@
             <div class="form-group">
                 <label>Выберите тип экспорта:</label>
                 <div class="export-options">
-                    <label><input type="radio" name="exportType" value="all" checked onchange="toggleExportProducts()"> 📋 Все товары (<span id="exportAllCount">0</span> шт.)</label>
-                    <label><input type="radio" name="exportType" value="filtered" onchange="toggleExportProducts()"> 🔍 Только отфильтрованные (<span id="exportFilteredCount">0</span> шт.)</label>
-                    <label><input type="radio" name="exportType" value="expiring" onchange="toggleExportProducts()"> ⚠️ Истекают 0-7 дней (<span id="exportExpiringCount">0</span> шт.)</label>
-                    <label><input type="radio" name="exportType" value="expired" onchange="toggleExportProducts()"> ❌ Просроченные (<span id="exportExpiredCount">0</span> шт.)</label>
-                    <label><input type="radio" name="exportType" value="selected" onchange="toggleExportProducts()"> ☑️ Выбранные вручную</label>
+                    <label><input type="radio" name="exportType" value="all" checked onchange="window.toggleExportProducts()"> 📋 Все товары (<span id="exportAllCount">0</span> шт.)</label>
+                    <label><input type="radio" name="exportType" value="filtered" onchange="window.toggleExportProducts()"> 🔍 Только отфильтрованные (<span id="exportFilteredCount">0</span> шт.)</label>
+                    <label><input type="radio" name="exportType" value="expiring" onchange="window.toggleExportProducts()"> ⚠️ Истекают 0-7 дней (<span id="exportExpiringCount">0</span> шт.)</label>
+                    <label><input type="radio" name="exportType" value="expired" onchange="window.toggleExportProducts()"> ❌ Просроченные (<span id="exportExpiredCount">0</span> шт.)</label>
+                    <label><input type="radio" name="exportType" value="selected" onchange="window.toggleExportProducts()"> ☑️ Выбранные вручную</label>
                 </div>
             </div>
             <div class="form-group" id="selectedProductsGroup" style="display: none;">
                 <label>Выберите товары для экспорта:</label>
                 <div class="export-products-list" id="exportProductsList"></div>
                 <div class="select-actions" style="margin-top: 8px;">
-                    <button class="btn btn-primary" onclick="selectAllExportProducts()" style="flex:1;">✅ Выбрать все</button>
-                    <button class="btn btn-close-modal" onclick="deselectAllExportProducts()" style="flex:1;">❌ Снять все</button>
+                    <button class="btn btn-primary" onclick="window.selectAllExportProducts()" style="flex:1;">✅ Выбрать все</button>
+                    <button class="btn btn-close-modal" onclick="window.deselectAllExportProducts()" style="flex:1;">❌ Снять все</button>
                 </div>
                 <div class="selected-count" id="exportSelectedCount">Выбрано: 0 товаров</div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-close-modal" onclick="closeExportModal()">Отмена</button>
-                <button class="btn btn-success" onclick="exportSelectedData()">📥 Скачать CSV</button>
+                <button class="btn btn-close-modal" onclick="window.closeExportModal()">Отмена</button>
+                <button class="btn btn-success" onclick="window.exportSelectedData()">📥 Скачать CSV</button>
             </div>
         </div>
     </div>
@@ -837,7 +837,7 @@
 
     <script>
         // ============================================
-        //  ПОЛНЫЙ СКРИПТ САЙТА - ИСПРАВЛЕННЫЙ
+        //  ПОЛНЫЙ СКРИПТ - ВСЕ ФУНКЦИИ ГЛОБАЛЬНЫЕ
         // ============================================
         
         // ---------- КОНФИГУРАЦИЯ ----------
@@ -997,14 +997,12 @@
                 const data = await response.json();
                 let addedCount = 0;
                 
-                // Создаем карту существующих товаров
                 const localMap = new Map();
                 products.forEach(p => {
                     const key = getProductKey(p);
                     localMap.set(key, p);
                 });
 
-                // Проходим по данным из таблицы
                 if (data && Array.isArray(data)) {
                     for (const row of data) {
                         if (isEmptyRow(row)) continue;
@@ -1056,14 +1054,12 @@
             try {
                 updateSyncStatus('yellow', 'Сохранение...');
                 
-                // Получаем текущие данные из таблицы
                 const response = await fetch(SHEET_URL);
                 let tableData = [];
                 if (response.ok) {
                     tableData = await response.json();
                 }
 
-                // Создаем карту существующих записей
                 const remoteMap = new Map();
                 tableData.forEach(row => {
                     if (!isEmptyRow(row)) {
@@ -1072,7 +1068,6 @@
                     }
                 });
 
-                // Находим новые товары
                 const newProducts = [];
                 products.forEach(p => {
                     const key = getProductKey(p);
@@ -1092,7 +1087,6 @@
                     return true;
                 }
 
-                // Отправляем новые товары
                 const postResponse = await fetch(SHEET_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1150,10 +1144,8 @@
                 showToast('🔄 Перестройка таблицы...');
                 updateSyncStatus('yellow', 'Перестройка...');
                 
-                // Очищаем таблицу
                 await fetch(SHEET_URL, { method: 'DELETE' });
                 
-                // Сохраняем все товары заново
                 const dataToSend = products.map(p => ({
                     name: p.name || '',
                     barcode: p.barcode || '',
@@ -1391,7 +1383,7 @@
                 const days = getDaysLeftFromDate(p.expiry);
                 const status = getStatus(days);
                 html += `
-                    <div class="edit-product-item" onclick="openEditProductModal('${p.id}')">
+                    <div class="edit-product-item" onclick="window.openEditProductModal('${p.id}')">
                         <div class="status-dot ${status.class}"></div>
                         <div class="info">
                             <div class="name">${escapeHtml(p.name)}</div>
@@ -1513,7 +1505,7 @@
                         <input type="checkbox" data-idx="${idx}" data-dept="${t.department || ''}">
                         <span class="info">${escapeHtml(t.name)} ${t.barcode ? `🔢${escapeHtml(t.barcode)}` : ''} ${t.weight ? `⚖️${escapeHtml(t.weight)}` : ''}</span>
                         <span class="dept">🏪 ${escapeHtml(deptDisplay)}</span>
-                        <button class="template-del" onclick="deleteTemplate(${idx})" title="Удалить шаблон">✕</button>
+                        <button class="template-del" onclick="window.deleteTemplate(${idx})" title="Удалить шаблон">✕</button>
                     </div>
                 `;
             });
@@ -1649,8 +1641,8 @@
                 const status = getStatus(days);
                 const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
                 html += `
-                    <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="toggleProductSelection('${p.id}')">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleProductSelection('${p.id}')">
+                    <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="window.toggleProductSelection('${p.id}')">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleProductSelection('${p.id}')">
                         <div class="product-info">
                             <div class="product-name">${escapeHtml(p.name)}</div>
                             <div class="product-details">
@@ -1781,8 +1773,8 @@
                 const status = getStatus(days);
                 const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
                 html += `
-                    <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="toggleRemoveProductSelection('${p.id}')">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleRemoveProductSelection('${p.id}')">
+                    <div class="product-select-item ${isChecked ? 'selected' : ''}" onclick="window.toggleRemoveProductSelection('${p.id}')">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleRemoveProductSelection('${p.id}')">
                         <div class="product-info">
                             <div class="product-name">${escapeHtml(p.name)}</div>
                             <div class="product-details">
@@ -2200,8 +2192,8 @@
                 const days = getDaysLeftFromDate(p.expiry);
                 const status = getStatus(days);
                 html += `
-                    <div class="product-check-item" onclick="toggleExportProduct('${p.id}')">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleExportProduct('${p.id}')">
+                    <div class="product-check-item" onclick="window.toggleExportProduct('${p.id}')">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleExportProduct('${p.id}')">
                         <span>${escapeHtml(p.name)}</span>
                         <span class="info">📅 ${formatDateForList(p.expiry)}</span>
                         <span class="info" style="color: ${status.class};">${getStatusText(days)}</span>
@@ -2400,10 +2392,10 @@
                 const departmentHtml = p.department ? `<span class="department-badge">🏪 ${escapeHtml(p.department)}</span>` : '';
                 const expiryDisplay = formatDateForList(p.expiry);
                 const removeDeptBtn = p.department ? 
-                    `<button class="btn-icon remove-dept" onclick="event.stopPropagation(); removeFromDepartment('${p.id}')" title="Удалить из отдела">🚫</button>` : '';
+                    `<button class="btn-icon remove-dept" onclick="event.stopPropagation(); window.removeFromDepartment('${p.id}')" title="Удалить из отдела">🚫</button>` : '';
                 
                 html += `
-                    <div class="product-item" onclick="openEditProductModal('${p.id}')">
+                    <div class="product-item" onclick="window.openEditProductModal('${p.id}')">
                         <div class="product-status ${status.class}"></div>
                         <div class="product-info">
                             <div class="product-name">${escapeHtml(p.name)}</div>
@@ -2417,7 +2409,7 @@
                         <div class="product-days ${status.class}">${daysText}</div>
                         <div class="product-actions" onclick="event.stopPropagation();">
                             ${removeDeptBtn}
-                            <button class="btn-icon delete" onclick="openDeleteModal('${p.id}')" title="Удалить товар">✕</button>
+                            <button class="btn-icon delete" onclick="window.openDeleteModal('${p.id}')" title="Удалить товар">✕</button>
                         </div>
                     </div>
                 `;
@@ -2443,7 +2435,6 @@
                 }
             }, 1000);
 
-            // Автосинхронизация каждые 30 секунд
             setInterval(() => {
                 if (!isSyncing) {
                     loadFromGoogle();
@@ -2451,7 +2442,69 @@
             }, 30000);
         }
 
-        // Запускаем при загрузке
+        // ДЕЛАЕМ ВСЕ ФУНКЦИИ ГЛОБАЛЬНЫМИ
+        window.openAddModal = openAddModal;
+        window.closeAddModal = closeAddModal;
+        window.addProduct = addProduct;
+        window.openAddToDepartmentModal = openAddToDepartmentModal;
+        window.closeAddToDepartmentModal = closeAddToDepartmentModal;
+        window.filterAddProducts = filterAddProducts;
+        window.selectAllProducts = selectAllProducts;
+        window.deselectAllProducts = deselectAllProducts;
+        window.toggleProductSelection = toggleProductSelection;
+        window.addSelectedToDepartment = addSelectedToDepartment;
+        window.openRemoveFromDepartmentModal = openRemoveFromDepartmentModal;
+        window.closeRemoveFromDepartmentModal = closeRemoveFromDepartmentModal;
+        window.filterRemoveProducts = filterRemoveProducts;
+        window.toggleRemoveProductSelection = toggleRemoveProductSelection;
+        window.selectAllRemoveProducts = selectAllRemoveProducts;
+        window.deselectAllRemoveProducts = deselectAllRemoveProducts;
+        window.removeSelectedFromDepartment = removeSelectedFromDepartment;
+        window.removeFromDepartment = removeFromDepartment;
+        window.openTemplateModal = openTemplateModal;
+        window.closeTemplateModal = closeTemplateModal;
+        window.addTemplateItem = addTemplateItem;
+        window.deleteTemplate = deleteTemplate;
+        window.addTemplateProducts = addTemplateProducts;
+        window.renderTemplateList = renderTemplateList;
+        window.openEditByDepartmentModal = openEditByDepartmentModal;
+        window.closeEditByDepartmentModal = closeEditByDepartmentModal;
+        window.renderEditProducts = renderEditProducts;
+        window.openEditProductModal = openEditProductModal;
+        window.closeEditProductModal = closeEditProductModal;
+        window.saveEditProduct = saveEditProduct;
+        window.filterExpired = filterExpired;
+        window.filterExpiring = filterExpiring;
+        window.filterWeek = filterWeek;
+        window.filterOk = filterOk;
+        window.showAll = showAll;
+        window.showReminders = showReminders;
+        window.closeRemindersModal = closeRemindersModal;
+        window.toggleCalculator = toggleCalculator;
+        window.calculateExpiry = calculateExpiry;
+        window.addCalculatedProduct = addCalculatedProduct;
+        window.syncWithGoogle = syncWithGoogle;
+        window.rebuildTable = rebuildTable;
+        window.toggleTheme = toggleTheme;
+        window.openDeleteModal = openDeleteModal;
+        window.closeDeleteModal = closeDeleteModal;
+        window.confirmDelete = confirmDelete;
+        window.clearAll = clearAll;
+        window.openExportModal = openExportModal;
+        window.closeExportModal = closeExportModal;
+        window.toggleExportProducts = toggleExportProducts;
+        window.selectAllExportProducts = selectAllExportProducts;
+        window.deselectAllExportProducts = deselectAllExportProducts;
+        window.toggleExportProduct = toggleExportProduct;
+        window.exportSelectedData = exportSelectedData;
+        window.filterDepartment = filterDepartment;
+        window.setSort = setSort;
+        window.onSearchInput = onSearchInput;
+        window.clearSearch = clearSearch;
+        window.clearDepartment = clearDepartment;
+        window.render = render;
+
+        // Запускаем
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
