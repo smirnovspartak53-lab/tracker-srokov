@@ -6,7 +6,7 @@
     <title>📦 Трекер сроков годности</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        /* ... все ваши стили остаются без изменений ... */
+        /* ===== ВСЕ ВАШИ СТИЛИ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; padding-bottom: 80px; color: #1a1a1a; transition: background 0.3s, color 0.3s; }
         body.dark { background: #1a1a1a; color: #e0e0e0; }
@@ -293,7 +293,6 @@
     </style>
 </head>
 <body>
-    <!-- ВСЯ ВЕРСТКА ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ -->
     <div class="container">
         <div class="header">
             <h1>📦 Трекер сроков</h1>
@@ -839,8 +838,10 @@
 
     <script>
         // ============================================
-        //  КОНФИГУРАЦИЯ
+        //  ИДЕАЛЬНЫЙ СКРИПТ ДЛЯ СИНХРОНИЗАЦИИ
         // ============================================
+        
+        // ---------- КОНФИГУРАЦИЯ ----------
         const SHEET_URL = 'https://api.sheetbest.com/sheets/';
         const YOUR_SHEET_ID = '3887ff36-d66d-4965-ad6d-3f2b19a3d7ce';
 
@@ -861,23 +862,7 @@
         let templates = [];
         let editTargetId = null;
 
-        // ===================== ТЕМА =====================
-        function toggleTheme() {
-            document.body.classList.toggle('dark');
-            currentTheme = document.body.classList.contains('dark') ? 'dark' : 'light';
-            localStorage.setItem('theme', currentTheme);
-            showToast(currentTheme === 'dark' ? '🌙 Тёмная тема' : '🌞 Светлая тема');
-        }
-
-        function loadTheme() {
-            const saved = localStorage.getItem('theme');
-            if (saved === 'dark') {
-                document.body.classList.add('dark');
-                currentTheme = 'dark';
-            }
-        }
-
-        // ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
+        // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
         function escapeHtml(text) {
             if (!text) return '';
             const div = document.createElement('div');
@@ -946,30 +931,11 @@
             return `${daysLeft} дн.`;
         }
 
-        // ===================== РАБОТА С ID ТАБЛИЦЫ =====================
         function getSheetId() {
             return localStorage.getItem('google_sheet_id') || YOUR_SHEET_ID;
         }
 
-        // ===================== TOAST =====================
-        let toastTimeout;
-        function showToast(text, type = '') {
-            const toast = document.getElementById('toast');
-            toast.textContent = text;
-            toast.className = 'toast show ' + type;
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-
-        // ===================== СТАТУС СИНХРОНИЗАЦИИ =====================
-        function updateSyncStatus(color, text) {
-            document.getElementById('syncDot').className = 'dot ' + color;
-            document.getElementById('syncText').textContent = text;
-        }
-
-        // ===================== КЛЮЧ ДЛЯ УНИКАЛЬНОЙ ИДЕНТИФИКАЦИИ =====================
+        // ---------- УНИКАЛЬНЫЙ КЛЮЧ ДЛЯ ТОВАРА ----------
         function getProductKey(product) {
             const name = (product.name || '').trim().toLowerCase();
             const barcode = (product.barcode || '').trim();
@@ -984,7 +950,43 @@
             return !row.name && !row.barcode && !row.weight && !row.department && !row.expiry;
         }
 
-        // ===================== ЗАГРУЗКА ИЗ GOOGLE =====================
+        // ---------- TOAST ----------
+        let toastTimeout;
+        function showToast(text, type = '') {
+            const toast = document.getElementById('toast');
+            toast.textContent = text;
+            toast.className = 'toast show ' + type;
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ---------- СТАТУС СИНХРОНИЗАЦИИ ----------
+        function updateSyncStatus(color, text) {
+            const dot = document.getElementById('syncDot');
+            const textEl = document.getElementById('syncText');
+            if (dot) dot.className = 'dot ' + color;
+            if (textEl) textEl.textContent = text;
+        }
+
+        // ---------- ТЕМА ----------
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            currentTheme = document.body.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('theme', currentTheme);
+            showToast(currentTheme === 'dark' ? '🌙 Тёмная тема' : '🌞 Светлая тема');
+        }
+
+        function loadTheme() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'dark') {
+                document.body.classList.add('dark');
+                currentTheme = 'dark';
+            }
+        }
+
+        // ---------- ЗАГРУЗКА ИЗ GOOGLE (ТОЛЬКО НОВЫЕ) ----------
         async function loadFromGoogle() {
             const sheetId = getSheetId();
             if (!sheetId) {
@@ -1005,80 +1007,61 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const data = await response.json();
-                const remoteProducts = [];
+                let addedCount = 0;
+                let skippedCount = 0;
                 
-                if (data && Array.isArray(data)) {
-                    data.forEach(row => {
-                        if (isEmptyRow(row)) return;
-                        remoteProducts.push({
-                            id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                            name: row.name || 'Без названия',
-                            barcode: row.barcode || '',
-                            weight: row.weight || '',
-                            department: row.department || '',
-                            expiry: normalizeDate(row.expiry || getDateStr(7))
-                        });
-                    });
-                }
-
-                // Сравниваем и объединяем
+                // Создаем карту существующих товаров на сайте
                 const localMap = new Map();
                 products.forEach(p => {
                     const key = getProductKey(p);
                     localMap.set(key, p);
                 });
 
-                const remoteMap = new Map();
-                remoteProducts.forEach(p => {
-                    const key = getProductKey(p);
-                    remoteMap.set(key, p);
-                });
-
-                let added = 0;
-                let updated = 0;
-
-                // Добавляем новые товары из таблицы
-                remoteMap.forEach((remoteProduct, key) => {
-                    if (!localMap.has(key)) {
-                        products.push(remoteProduct);
-                        added++;
-                    } else {
-                        // Обновляем существующий товар данными из таблицы
-                        const local = localMap.get(key);
-                        if (remoteProduct.department && !local.department) {
-                            local.department = remoteProduct.department;
-                            updated++;
+                // Проходим по данным из таблицы
+                if (data && Array.isArray(data)) {
+                    for (const row of data) {
+                        if (isEmptyRow(row)) continue;
+                        
+                        const newProduct = {
+                            id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                            name: row.name || 'Без названия',
+                            barcode: row.barcode || '',
+                            weight: row.weight || '',
+                            department: row.department || '',
+                            expiry: row.expiry || getDateStr(7)
+                        };
+                        
+                        const key = getProductKey(newProduct);
+                        
+                        // Если товара нет на сайте - добавляем
+                        if (!localMap.has(key)) {
+                            products.push(newProduct);
+                            localMap.set(key, newProduct);
+                            addedCount++;
+                        } else {
+                            // Если товар есть, но у него нет отдела - обновляем
+                            const existing = localMap.get(key);
+                            if (row.department && !existing.department) {
+                                existing.department = row.department;
+                                skippedCount++;
+                            }
+                            if (row.weight && !existing.weight) {
+                                existing.weight = row.weight;
+                                skippedCount++;
+                            }
                         }
-                        if (remoteProduct.weight && !local.weight) {
-                            local.weight = remoteProduct.weight;
-                            updated++;
-                        }
-                    }
-                });
-
-                // Удаляем товары, которых нет в таблице (если таблица не пуста)
-                if (remoteProducts.length > 0) {
-                    const toRemove = [];
-                    products.forEach(p => {
-                        const key = getProductKey(p);
-                        if (!remoteMap.has(key)) {
-                            toRemove.push(p);
-                        }
-                    });
-                    if (toRemove.length > 0) {
-                        products = products.filter(p => !toRemove.includes(p));
-                        showToast(`🗑️ Удалено ${toRemove.length} товаров, которых нет в таблице`);
                     }
                 }
 
-                if (added > 0) {
-                    showToast(`✅ Добавлено ${added} товаров из таблицы`);
+                if (addedCount > 0) {
+                    showToast(`✅ Добавлено ${addedCount} новых товаров из таблицы`);
+                    saveToLocal();
                 }
-                if (updated > 0) {
-                    showToast(`🔄 Обновлено ${updated} товаров`);
+                if (skippedCount > 0) {
+                    showToast(`🔄 Обновлено ${skippedCount} товаров (отделы/вес)`);
+                    saveToLocal();
                 }
 
-                saveToLocal();
                 render();
                 updateSyncStatus('green', `Синхронизировано (${products.length})`);
             } catch (error) {
@@ -1089,13 +1072,7 @@
             }
         }
 
-        function normalizeDate(dateStr) {
-            if (!dateStr) return getDateStr(7);
-            const parsed = parseDateDMY(dateStr);
-            return parsed ? parsed.raw : getDateStr(7);
-        }
-
-        // ===================== СОХРАНЕНИЕ В GOOGLE =====================
+        // ---------- СОХРАНЕНИЕ В GOOGLE (ТОЛЬКО НОВЫЕ) ----------
         async function saveToGoogle() {
             const sheetId = getSheetId();
             if (!sheetId) {
@@ -1113,16 +1090,36 @@
                     tableData = await response.json();
                 }
 
-                // Создаем карту существующих записей
+                // Создаем карту существующих записей в таблице
                 const remoteMap = new Map();
-                tableData.forEach((row, index) => {
+                tableData.forEach(row => {
                     if (!isEmptyRow(row)) {
                         const key = getProductKey(row);
-                        remoteMap.set(key, { row, index });
+                        remoteMap.set(key, row);
                     }
                 });
 
-                // Находим пустые строки
+                // Находим новые товары
+                const newProducts = [];
+                products.forEach(p => {
+                    const key = getProductKey(p);
+                    if (!remoteMap.has(key)) {
+                        newProducts.push({
+                            name: p.name || '',
+                            barcode: p.barcode || '',
+                            weight: p.weight || '',
+                            department: p.department || '',
+                            expiry: p.expiry || ''
+                        });
+                    }
+                });
+
+                if (newProducts.length === 0) {
+                    updateSyncStatus('green', 'Нет новых товаров');
+                    return true;
+                }
+
+                // Находим пустые строки для заполнения
                 const emptyIndices = [];
                 tableData.forEach((row, index) => {
                     if (isEmptyRow(row)) {
@@ -1131,111 +1128,49 @@
                 });
 
                 let added = 0;
-                let updated = 0;
                 let emptyIndexUsed = 0;
 
-                // Обрабатываем каждый локальный товар
-                for (const product of products) {
-                    const key = getProductKey(product);
-                    const remoteEntry = remoteMap.get(key);
-                    const productData = {
-                        name: product.name || '',
-                        barcode: product.barcode || '',
-                        weight: product.weight || '',
-                        department: product.department || '',
-                        expiry: product.expiry || ''
-                    };
-
-                    if (remoteEntry) {
-                        // Товар существует - обновляем если изменился
-                        const remoteRow = remoteEntry.row;
-                        let needsUpdate = false;
-                        if (remoteRow.department !== productData.department) needsUpdate = true;
-                        if (remoteRow.weight !== productData.weight) needsUpdate = true;
-                        if (remoteRow.name !== productData.name) needsUpdate = true;
-                        if (remoteRow.barcode !== productData.barcode) needsUpdate = true;
-
-                        if (needsUpdate) {
-                            const updateResponse = await fetch(`${SHEET_URL}${sheetId}/${remoteEntry.index}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(productData)
-                            });
-                            if (updateResponse.ok) {
-                                updated++;
-                            } else {
-                                console.error('Ошибка обновления:', await updateResponse.text());
-                            }
-                        }
-                    } else {
-                        // Новый товар - добавляем
-                        let success = false;
-                        
-                        // Сначала пробуем использовать пустую строку
-                        if (emptyIndexUsed < emptyIndices.length) {
-                            const emptyIndex = emptyIndices[emptyIndexUsed];
-                            const fillResponse = await fetch(`${SHEET_URL}${sheetId}/${emptyIndex}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(productData)
-                            });
-                            if (fillResponse.ok) {
-                                success = true;
-                                emptyIndexUsed++;
-                            }
-                        }
-
-                        // Если не получилось, добавляем в конец
-                        if (!success) {
-                            const postResponse = await fetch(`${SHEET_URL}${sheetId}`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(productData)
-                            });
-                            if (postResponse.ok) {
-                                success = true;
-                            }
-                        }
-
-                        if (success) {
-                            added++;
+                // Добавляем новые товары
+                for (const product of newProducts) {
+                    let success = false;
+                    
+                    // Сначала пробуем заполнить пустую строку
+                    if (emptyIndexUsed < emptyIndices.length) {
+                        const emptyIndex = emptyIndices[emptyIndexUsed];
+                        const fillResponse = await fetch(`${SHEET_URL}${sheetId}/${emptyIndex}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(product)
+                        });
+                        if (fillResponse.ok) {
+                            success = true;
+                            emptyIndexUsed++;
                         }
                     }
 
-                    // Небольшая задержка, чтобы не перегружать API
+                    // Если не получилось - добавляем в конец
+                    if (!success) {
+                        const postResponse = await fetch(`${SHEET_URL}${sheetId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(product)
+                        });
+                        if (postResponse.ok) {
+                            success = true;
+                        }
+                    }
+
+                    if (success) {
+                        added++;
+                    }
+                    
+                    // Небольшая задержка
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
-                // Удаляем товары из таблицы, которых нет в локальном списке
-                const localKeys = new Set();
-                products.forEach(p => {
-                    localKeys.add(getProductKey(p));
-                });
-
-                const toDelete = [];
-                remoteMap.forEach((entry, key) => {
-                    if (!localKeys.has(key) && !isEmptyRow(entry.row)) {
-                        toDelete.push(entry.index);
-                    }
-                });
-
-                // Сортируем индексы по убыванию для корректного удаления
-                toDelete.sort((a, b) => b - a);
-                for (const index of toDelete) {
-                    try {
-                        await fetch(`${SHEET_URL}${sheetId}/${index}`, {
-                            method: 'DELETE'
-                        });
-                        console.log(`🗑️ Удалена строка ${index}`);
-                    } catch (e) {
-                        console.error('Ошибка удаления:', e);
-                    }
+                if (added > 0) {
+                    showToast(`✅ Добавлено ${added} новых товаров в таблицу`);
                 }
-
-                if (added > 0) showToast(`✅ Добавлено ${added} товаров`);
-                if (updated > 0) showToast(`🔄 Обновлено ${updated} товаров`);
-                if (toDelete.length > 0) showToast(`🗑️ Удалено ${toDelete.length} товаров из таблицы`);
-
                 updateSyncStatus('green', `Сохранено (${products.length})`);
                 return true;
             } catch (error) {
@@ -1246,40 +1181,20 @@
             }
         }
 
-        // ===================== ЛОКАЛЬНОЕ ХРАНИЛИЩЕ =====================
-        function loadFromLocal() {
-            const saved = localStorage.getItem('products_tracker_local');
-            if (saved) {
-                try { products = JSON.parse(saved); } catch(e) { products = []; }
-            } else {
-                products = [
-                    { id: '1', name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка', expiry: getDateStr(2) },
-                    { id: '2', name: 'Кетчуп Махеев', barcode: '4604258008505', weight: '350г', department: 'Соусы', expiry: getDateStr(5) },
-                    { id: '3', name: 'Соль', barcode: '4601234567892', weight: '', department: 'Специи', expiry: getDateStr(180) }
-                ];
-                saveToLocal();
-            }
-            render();
-        }
-
-        function saveToLocal() {
-            localStorage.setItem('products_tracker_local', JSON.stringify(products));
-        }
-
-        // ===================== СИНХРОНИЗАЦИЯ =====================
+        // ---------- ПОЛНАЯ СИНХРОНИЗАЦИЯ ----------
         async function syncWithGoogle() {
             if (isSyncing) return;
             isSyncing = true;
             updateSyncStatus('yellow', 'Синхронизация...');
             
             try {
-                // Сначала загружаем из таблицы
+                // 1. Загружаем новые товары из таблицы
                 await loadFromGoogle();
-                // Затем сохраняем локальные изменения
+                // 2. Сохраняем новые товары в таблицу
                 await saveToGoogle();
-                // И снова загружаем, чтобы получить обновленные данные
+                // 3. Еще раз загружаем для обновления
                 await loadFromGoogle();
-                showToast('✅ Синхронизация завершена!');
+                showToast('✅ Полная синхронизация завершена!');
             } catch (error) {
                 console.error('Ошибка синхронизации:', error);
                 showToast('⚠️ Ошибка синхронизации');
@@ -1289,7 +1204,7 @@
             isSyncing = false;
         }
 
-        // ===================== ПЕРЕСТРОЙКА ТАБЛИЦЫ =====================
+        // ---------- ПЕРЕСТРОЙКА ТАБЛИЦЫ ----------
         async function rebuildTable() {
             if (products.length === 0) {
                 showToast('📭 Нет товаров для перестройки');
@@ -1348,7 +1263,7 @@
             }
         }
 
-        // ===================== УДАЛЕНИЕ ИЗ GOOGLE =====================
+        // ---------- УДАЛЕНИЕ ИЗ GOOGLE ----------
         async function deleteFromGoogle(product) {
             const sheetId = getSheetId();
             if (!sheetId) return false;
@@ -1383,7 +1298,7 @@
             }
         }
 
-        // ===================== ОБНОВЛЕНИЕ ОТДЕЛА В GOOGLE =====================
+        // ---------- ОБНОВЛЕНИЕ ОТДЕЛА В GOOGLE ----------
         async function updateDepartmentInGoogle(productData) {
             const sheetId = getSheetId();
             if (!sheetId) return false;
@@ -1428,7 +1343,27 @@
             }
         }
 
-        // ===================== ФИЛЬТРЫ =====================
+        // ---------- ЛОКАЛЬНОЕ ХРАНИЛИЩЕ ----------
+        function loadFromLocal() {
+            const saved = localStorage.getItem('products_tracker_local');
+            if (saved) {
+                try { products = JSON.parse(saved); } catch(e) { products = []; }
+            } else {
+                products = [
+                    { id: '1', name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка', expiry: getDateStr(2) },
+                    { id: '2', name: 'Кетчуп Махеев', barcode: '4604258008505', weight: '350г', department: 'Соусы', expiry: getDateStr(5) },
+                    { id: '3', name: 'Соль', barcode: '4601234567892', weight: '', department: 'Специи', expiry: getDateStr(180) }
+                ];
+                saveToLocal();
+            }
+            render();
+        }
+
+        function saveToLocal() {
+            localStorage.setItem('products_tracker_local', JSON.stringify(products));
+        }
+
+        // ---------- ФИЛЬТРЫ ----------
         function filterDepartment(department) {
             currentDepartment = department;
             document.querySelectorAll('.dept-btn').forEach(btn => {
@@ -1465,7 +1400,7 @@
             showToast('🔍 Поиск очищен');
         }
 
-        // ===================== НАПОМИНАНИЯ =====================
+        // ---------- НАПОМИНАНИЯ ----------
         function checkReminders() {
             let expired = 0;
             let expiring = 0;
@@ -1483,20 +1418,24 @@
             });
 
             const badge = document.getElementById('expiredBadge');
-            if (expired > 0) {
-                badge.textContent = expired;
-                badge.style.display = 'inline-block';
-            } else {
-                badge.style.display = 'none';
+            if (badge) {
+                if (expired > 0) {
+                    badge.textContent = expired;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
             }
 
             const notifyBadge = document.getElementById('notifyBadge');
-            const total = expired + expiring;
-            if (total > 0) {
-                notifyBadge.textContent = total;
-                notifyBadge.style.display = 'inline-block';
-            } else {
-                notifyBadge.style.display = 'none';
+            if (notifyBadge) {
+                const total = expired + expiring;
+                if (total > 0) {
+                    notifyBadge.textContent = total;
+                    notifyBadge.style.display = 'inline-block';
+                } else {
+                    notifyBadge.style.display = 'none';
+                }
             }
 
             return reminders;
@@ -1541,7 +1480,7 @@
             document.getElementById('remindersModal').classList.remove('active');
         }
 
-        // ===================== РЕДАКТОР =====================
+        // ---------- РЕДАКТОР ----------
         function openEditByDepartmentModal() {
             document.getElementById('editByDepartmentModal').classList.add('active');
             document.getElementById('editSearchInput').value = '';
@@ -1643,9 +1582,6 @@
             }
 
             const product = products[productIndex];
-            const oldName = product.name;
-            const oldBarcode = product.barcode;
-            const oldExpiry = product.expiry;
 
             if (barcode) {
                 const exists = products.some(p => p.barcode === barcode && p.id !== id && p.expiry === parsed.raw);
@@ -1655,6 +1591,7 @@
                 }
             }
 
+            const oldProduct = { ...product };
             product.name = name;
             product.barcode = barcode;
             product.weight = weight;
@@ -1666,11 +1603,12 @@
             closeEditProductModal();
             showToast(`✅ Товар обновлён`, 'success');
             
-            // Синхронизируем изменения
+            // Обновляем в таблице
+            updateDepartmentInGoogle(product);
             syncWithGoogle();
         }
 
-        // ===================== ШАБЛОНЫ =====================
+        // ---------- ШАБЛОНЫ ----------
         function loadTemplates() {
             const saved = localStorage.getItem('templates_data');
             if (saved) {
@@ -1679,10 +1617,7 @@
                 templates = [
                     { name: 'Кетчуп Махеев Болгарский', barcode: '4604258008505', weight: '350г', department: 'Соусы' },
                     { name: 'Молоко 3,2% 1л', barcode: '4601234567890', weight: '1л', department: 'Молочка' },
-                    { name: 'Соль поваренная', barcode: '4601234567892', weight: '', department: 'Специи' },
-                    { name: 'Масло подсолнечное 1л', barcode: '4601234567893', weight: '1л', department: 'Масла' },
-                    { name: 'Консервы горошек', barcode: '4601234567894', weight: '400г', department: 'Консервы' },
-                    { name: 'Пельмени 0,5кг', barcode: '4601234567895', weight: '0.5кг', department: 'Заморозка' }
+                    { name: 'Соль поваренная', barcode: '4601234567892', weight: '', department: 'Специи' }
                 ];
                 saveTemplates();
             }
@@ -1802,7 +1737,7 @@
             document.getElementById('templateModal').classList.remove('active');
         }
 
-        // ===================== ДОБАВЛЕНИЕ В ОТДЕЛ =====================
+        // ---------- ДОБАВЛЕНИЕ В ОТДЕЛ ----------
         function openAddToDepartmentModal() {
             if (products.length === 0) {
                 showToast('📭 Нет товаров для добавления в отдел');
@@ -1945,7 +1880,7 @@
             syncWithGoogle();
         }
 
-        // ===================== УДАЛЕНИЕ ИЗ ОТДЕЛА =====================
+        // ---------- УДАЛЕНИЕ ИЗ ОТДЕЛА ----------
         function openRemoveFromDepartmentModal() {
             if (products.length === 0) {
                 showToast('📭 Нет товаров для удаления из отдела');
@@ -2162,7 +2097,7 @@
             }
         }
 
-        // ===================== КАЛЬКУЛЯТОР =====================
+        // ---------- КАЛЬКУЛЯТОР ----------
         function toggleCalculator() {
             const calculator = document.getElementById('calculator');
             calculator.classList.toggle('active');
@@ -2256,7 +2191,7 @@
             document.getElementById('calculator').classList.remove('active');
         }
 
-        // ===================== ДОБАВЛЕНИЕ ТОВАРА =====================
+        // ---------- ДОБАВЛЕНИЕ ТОВАРА ----------
         function openAddModal() {
             document.getElementById('addModal').classList.add('active');
             document.getElementById('productName').value = '';
@@ -2314,7 +2249,7 @@
             syncWithGoogle();
         }
 
-        // ===================== УДАЛЕНИЕ ТОВАРА =====================
+        // ---------- УДАЛЕНИЕ ТОВАРА ----------
         function openDeleteModal(id) {
             deleteTargetId = id;
             const product = products.find(p => p.id === id);
@@ -2354,7 +2289,7 @@
             closeDeleteModal();
         }
 
-        // ===================== ОЧИСТКА ВСЕХ =====================
+        // ---------- ОЧИСТКА ВСЕХ ----------
         async function clearAll() {
             if (products.length === 0) {
                 showToast('📭 Список пуст');
@@ -2384,7 +2319,7 @@
             }
         }
 
-        // ===================== ЭКСПОРТ =====================
+        // ---------- ЭКСПОРТ ----------
         function openExportModal() {
             if (products.length === 0) {
                 showToast('📭 Нет данных для экспорта');
@@ -2550,10 +2485,11 @@
             showToast(`✅ Экспортировано ${dataToExport.length} товаров`);
         }
 
-        // ===================== ОТРИСОВКА =====================
+        // ---------- ОТРИСОВКА ----------
         function render() {
             const today = getTodayDate();
-            document.getElementById('todayDate').textContent = '📅 ' + today.formatted;
+            const dateEl = document.getElementById('todayDate');
+            if (dateEl) dateEl.textContent = '📅 ' + today.formatted;
 
             let filtered = [...products];
             
@@ -2602,11 +2538,16 @@
                 else ok++;
             });
 
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('expiredCount').textContent = expired;
-            document.getElementById('weekCount').textContent = week;
-            document.getElementById('expiringCount').textContent = expiring;
-            document.getElementById('okCount').textContent = ok;
+            const totalEl = document.getElementById('totalCount');
+            const expiredEl = document.getElementById('expiredCount');
+            const weekEl = document.getElementById('weekCount');
+            const expiringEl = document.getElementById('expiringCount');
+            const okEl = document.getElementById('okCount');
+            if (totalEl) totalEl.textContent = total;
+            if (expiredEl) expiredEl.textContent = expired;
+            if (weekEl) weekEl.textContent = week;
+            if (expiringEl) expiringEl.textContent = expiring;
+            if (okEl) okEl.textContent = ok;
 
             checkReminders();
 
@@ -2679,10 +2620,12 @@
             list.innerHTML = html;
         }
 
-        // ===================== ЗАПУСК =====================
+        // ---------- ЗАПУСК ----------
         function init() {
             loadTheme();
             loadTemplates();
+            
+            // Проверяем наличие элементов перед использованием
             const sheetId = getSheetId();
             if (sheetId) {
                 loadFromGoogle();
@@ -2692,6 +2635,7 @@
             
             // Автообновление каждую минуту
             setInterval(render, 60000);
+            
             // Автосинхронизация каждые 30 секунд
             setInterval(() => {
                 if (getSheetId() && !isSyncing) {
@@ -2712,7 +2656,12 @@
             }, 1000);
         }
 
-        init();
+        // Запускаем при загрузке
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
